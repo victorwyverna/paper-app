@@ -16,6 +16,6 @@ Write. Publish. Share.
 - [x] Initialize the backend application and connect PostgreSQL through Prisma.
 - [x] Implement article creation and public viewing API.
 - [x] Add article API integration tests.
-- [ ] Limit request body size and validate TipTap document structure.
+- [x] Limit request body size and validate TipTap document structure.
 - [ ] Add protected article editing and deletion.
 - [ ] Add image uploads with MinIO / S3.
