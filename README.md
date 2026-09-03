@@ -13,4 +13,5 @@ Write. Publish. Share.
 
 - [x] Initialize turborepo.
 - [x] Initialize PostgreSQL and MinIO (S3-compatible storage).
-- [ ] Initialize backend app.
+- [x] Initialize backend app, add article creation and public viewing API.
+- [ ] Add article API integration tests.
