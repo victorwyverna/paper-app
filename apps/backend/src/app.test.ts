@@ -143,3 +143,27 @@ test('returns 413 when the request body is too large', async () => {
 
   assert.equal(body.message, 'Request body is too large');
 });
+
+test('returns 400 when article content is not a TipTap document', async () => {
+  const response = await fetch(`${baseUrl}/articles`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      title: 'Invalid content article',
+      content: {
+        type: 'paragraph',
+        content: [],
+      },
+    }),
+  });
+
+  assert.equal(response.status, 400);
+
+  const body = (await response.json()) as {
+    message: string;
+  };
+
+  assert.equal(body.message, 'Invalid article data');
+});
