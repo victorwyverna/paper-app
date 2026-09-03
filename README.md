@@ -13,5 +13,9 @@ Write. Publish. Share.
 
 - [x] Initialize turborepo.
 - [x] Initialize PostgreSQL and MinIO (S3-compatible storage).
-- [x] Initialize backend app, add article creation and public viewing API.
-- [ ] Add article API integration tests.
+- [x] Initialize the backend application and connect PostgreSQL through Prisma.
+- [x] Implement article creation and public viewing API.
+- [x] Add article API integration tests.
+- [ ] Limit request body size and validate TipTap document structure.
+- [ ] Add protected article editing and deletion.
+- [ ] Add image uploads with MinIO / S3.
