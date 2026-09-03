@@ -1,6 +1,10 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-import { readJsonBody, sendJson } from '../lib/http.js';
+import {
+  PayloadTooLargeError,
+  readJsonBody,
+  sendJson,
+} from '../lib/http.js';
 import { createArticleSchema } from '../schemas/article.js';
 import {
   createArticle,
@@ -16,6 +20,11 @@ export async function createArticleController(
   try {
     body = await readJsonBody(request);
   } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      sendJson(response, 413, { message: 'Request body is too large' });
+      return;
+    }
+
     if (error instanceof SyntaxError) {
       sendJson(response, 400, { message: 'Invalid JSON' });
       return;

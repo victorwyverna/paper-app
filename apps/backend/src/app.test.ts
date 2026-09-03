@@ -119,3 +119,27 @@ test('returns 404 for an unknown article slug', async () => {
 
   assert.equal(body.message, 'Article not found');
 });
+
+test('returns 413 when the request body is too large', async () => {
+  const response = await fetch(`${baseUrl}/articles`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      title: 'a'.repeat(1024 * 1024),
+      content: {
+        type: 'doc',
+        content: [],
+      },
+    }),
+  });
+
+  assert.equal(response.status, 413);
+
+  const body = (await response.json()) as {
+    message: string;
+  };
+
+  assert.equal(body.message, 'Request body is too large');
+});

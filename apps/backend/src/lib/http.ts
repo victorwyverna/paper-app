@@ -1,5 +1,13 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
+const maxJsonBodySize = 1024 * 1024;
+
+export class PayloadTooLargeError extends Error {
+  constructor() {
+    super('Request body is too large');
+  }
+}
+
 export function sendJson(
   response: ServerResponse,
   statusCode: number,
@@ -15,15 +23,24 @@ export function sendJson(
 export async function readJsonBody(
   request: IncomingMessage,
 ): Promise<unknown> {
-  let body = '';
+  const chunks: Buffer[] = [];
+  let bodySize = 0;
 
   for await (const chunk of request) {
-    body += chunk;
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+
+    bodySize += buffer.length;
+
+    if (bodySize > maxJsonBodySize) {
+      throw new PayloadTooLargeError();
+    }
+
+    chunks.push(buffer);
   }
 
-  if (!body) {
+  if (bodySize === 0) {
     throw new Error('Request body is required');
   }
 
-  return JSON.parse(body);
+  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
