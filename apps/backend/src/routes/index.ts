@@ -2,7 +2,9 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import {
   createArticleController,
+  deleteArticleController,
   getArticleBySlugController,
+  updateArticleController,
 } from '../controllers/articles.js';
 import { sendJson } from '../lib/http.js';
 
@@ -26,6 +28,20 @@ export async function routeRequest(
     const slug = decodeURIComponent(encodedSlug);
 
     await getArticleBySlugController(response, slug);
+    return;
+  }
+
+  if (request.method === 'PATCH' && encodedSlug) {
+    const slug = decodeURIComponent(encodedSlug);
+
+    await updateArticleController(request, response, slug);
+    return;
+  }
+
+  if (request.method === 'DELETE' && encodedSlug) {
+    const slug = decodeURIComponent(encodedSlug);
+
+    await deleteArticleController(request, response, slug);
     return;
   }
 

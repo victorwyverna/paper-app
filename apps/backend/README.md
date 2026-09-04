@@ -37,3 +37,11 @@ src/
 | --- | --- | --- |
 | `POST` | `/articles` | Create an article from `title` and TipTap JSON `content`. |
 | `GET` | `/articles/:slug` | Get a public article by its slug. |
+| `PATCH` | `/articles/:slug` | Update an article with `X-Edit-Token`. |
+| `DELETE` | `/articles/:slug` | Delete an article with `X-Edit-Token`. |
+
+## Editing an article
+
+`POST /articles` returns an `editToken` once. Store it on the client: it is required in the `X-Edit-Token` header for `PATCH` and `DELETE` requests.
+
+Public article responses never include this token.

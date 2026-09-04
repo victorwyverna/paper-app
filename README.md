@@ -17,5 +17,5 @@ Write. Publish. Share.
 - [x] Implement article creation and public viewing API.
 - [x] Add article API integration tests.
 - [x] Limit request body size and validate TipTap document structure.
-- [ ] Add protected article editing and deletion.
+- [x] Add protected article editing and deletion.
 - [ ] Add image uploads with MinIO / S3.

@@ -42,4 +42,18 @@ export const createArticleSchema = z.object({
   content: tiptapDocumentSchema,
 });
 
+export const updateArticleSchema = z
+  .object({
+    title: z.string().trim().min(1).max(200).optional(),
+    content: tiptapDocumentSchema.optional(),
+  })
+  .refine(
+    (data) => data.title !== undefined || data.content !== undefined,
+    {
+      message: 'At least one field is required',
+    },
+  );
+
+export type UpdateArticleInput = z.infer<typeof updateArticleSchema>;
+
 export type CreateArticleInput = z.infer<typeof createArticleSchema>;

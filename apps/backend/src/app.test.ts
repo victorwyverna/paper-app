@@ -38,7 +38,7 @@ after(async () => {
   await prisma.$disconnect();
 });
 
-test('creates an article and returns it by slug', async () => {
+test('creates an article and returns it publicly by slug', async () => {
   const title = `Test article ${randomUUID()}`;
   const content = {
     type: 'doc',
@@ -55,18 +55,22 @@ test('creates an article and returns it by slug', async () => {
 
   assert.equal(createResponse.status, 201);
 
-  const createdArticle = (await createResponse.json()) as {
-    slug: string;
-    title: string;
-    content: unknown;
+  const created = (await createResponse.json()) as {
+    article: {
+      slug: string;
+      title: string;
+      content: unknown;
+    };
+    editToken: string;
   };
 
-  assert.equal(createdArticle.title, title);
-  assert.deepEqual(createdArticle.content, content);
-  assert.ok(createdArticle.slug);
+  assert.equal(created.article.title, title);
+  assert.deepEqual(created.article.content, content);
+  assert.ok(created.article.slug);
+  assert.match(created.editToken, /^[a-f0-9]{64}$/);
 
   const getResponse = await fetch(
-    `${baseUrl}/articles/${createdArticle.slug}`,
+    `${baseUrl}/articles/${created.article.slug}`,
   );
 
   assert.equal(getResponse.status, 200);
@@ -75,11 +79,13 @@ test('creates an article and returns it by slug', async () => {
     slug: string;
     title: string;
     content: unknown;
+    editToken?: unknown;
   };
 
-  assert.equal(article.slug, createdArticle.slug);
+  assert.equal(article.slug, created.article.slug);
   assert.equal(article.title, title);
   assert.deepEqual(article.content, content);
+  assert.equal(article.editToken, undefined);
 });
 
 test('returns 400 when creating an article with invalid data', async () => {
@@ -166,4 +172,228 @@ test('returns 400 when article content is not a TipTap document', async () => {
   };
 
   assert.equal(body.message, 'Invalid article data');
+});
+
+test('updates an article with a valid edit token', async () => {
+  const createResponse = await fetch(`${baseUrl}/articles`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      title: `Article to update ${randomUUID()}`,
+      content: {
+        type: 'doc',
+        content: [],
+      },
+    }),
+  });
+
+  const created = (await createResponse.json()) as {
+    article: {
+      slug: string;
+    };
+    editToken: string;
+  };
+
+  const updatedTitle = `Updated article ${randomUUID()}`;
+
+  const updateResponse = await fetch(
+    `${baseUrl}/articles/${created.article.slug}`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Edit-Token': created.editToken,
+      },
+      body: JSON.stringify({
+        title: updatedTitle,
+      }),
+    },
+  );
+
+  assert.equal(updateResponse.status, 200);
+
+  const updatedArticle = (await updateResponse.json()) as {
+    slug: string;
+    title: string;
+  };
+
+  assert.equal(updatedArticle.slug, created.article.slug);
+  assert.equal(updatedArticle.title, updatedTitle);
+
+  const getResponse = await fetch(
+    `${baseUrl}/articles/${created.article.slug}`,
+  );
+
+  const publicArticle = (await getResponse.json()) as {
+    title: string;
+  };
+
+  assert.equal(publicArticle.title, updatedTitle);
+});
+
+test('returns 401 when updating without an edit token', async () => {
+  const response = await fetch(
+    `${baseUrl}/articles/article-${randomUUID()}`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: 'Updated title',
+      }),
+    },
+  );
+
+  assert.equal(response.status, 401);
+
+  const body = (await response.json()) as {
+    message: string;
+  };
+
+  assert.equal(body.message, 'X-Edit-Token is required');
+});
+
+test('returns 403 when updating with an invalid edit token', async () => {
+  const createResponse = await fetch(`${baseUrl}/articles`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      title: `Protected article ${randomUUID()}`,
+      content: {
+        type: 'doc',
+        content: [],
+      },
+    }),
+  });
+
+  const created = (await createResponse.json()) as {
+    article: {
+      slug: string;
+    };
+  };
+
+  const response = await fetch(
+    `${baseUrl}/articles/${created.article.slug}`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Edit-Token': 'invalid-token',
+      },
+      body: JSON.stringify({
+        title: 'Attempted update',
+      }),
+    },
+  );
+
+  assert.equal(response.status, 403);
+
+  const body = (await response.json()) as {
+    message: string;
+  };
+
+  assert.equal(body.message, 'Invalid edit token');
+});
+
+test('deletes an article with a valid edit token', async () => {
+  const createResponse = await fetch(`${baseUrl}/articles`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      title: `Article to delete ${randomUUID()}`,
+      content: {
+        type: 'doc',
+        content: [],
+      },
+    }),
+  });
+
+  const created = (await createResponse.json()) as {
+    article: {
+      slug: string;
+    };
+    editToken: string;
+  };
+
+  const deleteResponse = await fetch(
+    `${baseUrl}/articles/${created.article.slug}`,
+    {
+      method: 'DELETE',
+      headers: {
+        'X-Edit-Token': created.editToken,
+      },
+    },
+  );
+
+  assert.equal(deleteResponse.status, 204);
+
+  const getResponse = await fetch(
+    `${baseUrl}/articles/${created.article.slug}`,
+  );
+
+  assert.equal(getResponse.status, 404);
+});
+
+test('returns 401 when deleting without an edit token', async () => {
+  const response = await fetch(
+    `${baseUrl}/articles/article-${randomUUID()}`,
+    {
+      method: 'DELETE',
+    },
+  );
+
+  assert.equal(response.status, 401);
+
+  const body = (await response.json()) as {
+    message: string;
+  };
+
+  assert.equal(body.message, 'X-Edit-Token is required');
+});
+
+test('returns 403 when deleting with an invalid edit token', async () => {
+  const createResponse = await fetch(`${baseUrl}/articles`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      title: `Protected article ${randomUUID()}`,
+      content: {
+        type: 'doc',
+        content: [],
+      },
+    }),
+  });
+
+  const created = (await createResponse.json()) as {
+    article: {
+      slug: string;
+    };
+  };
+
+  const response = await fetch(
+    `${baseUrl}/articles/${created.article.slug}`,
+    {
+      method: 'DELETE',
+      headers: {
+        'X-Edit-Token': 'invalid-token',
+      },
+    },
+  );
+
+  assert.equal(response.status, 403);
+
+  const body = (await response.json()) as {
+    message: string;
+  };
+
+  assert.equal(body.message, 'Invalid edit token');
 });
