@@ -11,6 +11,7 @@ import {
   uploadImageController,
 } from '../controllers/uploads.js';
 import { sendJson } from '../lib/http.js';
+import { openApiDocument, swaggerUiHtml } from '../openapi.js';
 
 export async function routeRequest(
   request: IncomingMessage,
@@ -18,6 +19,17 @@ export async function routeRequest(
 ): Promise<void> {
   const url = new URL(request.url ?? '/', 'http://localhost');
   const { pathname } = url;
+
+  if (request.method === 'GET' && pathname === '/openapi.json') {
+    sendJson(response, 200, openApiDocument);
+    return;
+  }
+
+  if (request.method === 'GET' && pathname === '/docs') {
+    response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    response.end(swaggerUiHtml);
+    return;
+  }
 
   if (request.method === 'POST' && pathname === '/articles') {
     await createArticleController(request, response);

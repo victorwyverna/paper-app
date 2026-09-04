@@ -19,6 +19,7 @@ Write. Publish. Share.
 - [x] Limit request body size and validate TipTap document structure.
 - [x] Add protected article editing and deletion.
 - [x] Add image uploads with MinIO / S3.
+- [x] Add OpenAPI documentation, Swagger UI, and a generated Postman collection.
 - [ ] Initialize frontend application.
 - [ ] Add the frontend application shell, routing, and API client.
 - [ ] Build the article creation page and publish flow.

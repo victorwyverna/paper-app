@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "docs:postman": "npm run build && node scripts/generate-postman-collection.mjs",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
     "db:migrate": "prisma migrate deploy",

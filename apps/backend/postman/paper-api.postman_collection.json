@@ -1,0 +1,113 @@
+{
+  "info": {
+    "name": "Paper API",
+    "description": "Generated from the backend OpenAPI contract. Regenerate with `pnpm --filter @paper-app/backend docs:postman`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "slug",
+      "value": "my-first-article"
+    },
+    {
+      "key": "key",
+      "value": "image-key.png"
+    },
+    {
+      "key": "editToken",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Create an article",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"My first article\",\n  \"content\": {\n    \"type\": \"doc\",\n    \"content\": [\n      {\n        \"type\": \"paragraph\",\n        \"content\": [\n          {\n            \"type\": \"text\",\n            \"text\": \"Hello, world!\"\n          }\n        ]\n      }\n    ]\n  }\n}"
+        },
+        "url": "{{baseUrl}}/articles"
+      }
+    },
+    {
+      "name": "Get a public article",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/articles/{{slug}}"
+      }
+    },
+    {
+      "name": "Update an article",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Edit-Token",
+            "value": "{{editToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Updated article title\"\n}"
+        },
+        "url": "{{baseUrl}}/articles/{{slug}}"
+      }
+    },
+    {
+      "name": "Delete an article",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "X-Edit-Token",
+            "value": "{{editToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/articles/{{slug}}"
+      }
+    },
+    {
+      "name": "Upload an image",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "image/png"
+          }
+        ],
+        "body": {
+          "mode": "file",
+          "file": {
+            "src": ""
+          }
+        },
+        "url": "{{baseUrl}}/uploads"
+      }
+    },
+    {
+      "name": "Get an uploaded image",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/uploads/{{key}}"
+      }
+    }
+  ]
+}

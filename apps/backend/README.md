@@ -33,6 +33,11 @@ src/
 
 ## API
 
+The OpenAPI 3.1 contract is available from the running backend at
+[`/openapi.json`](http://localhost:3000/openapi.json). The interactive Swagger UI is at
+[`/docs`](http://localhost:3000/docs). Import the former URL (or the generated file below)
+directly into Postman.
+
 | Method | Path | Description |
 | --- | --- | --- |
 | `POST` | `/articles` | Create an article from `title` and TipTap JSON `content`. |
@@ -47,3 +52,14 @@ src/
 `POST /articles` returns an `editToken` once. Store it on the client: it is required in the `X-Edit-Token` header for `PATCH` and `DELETE` requests.
 
 Public article responses never include this token.
+
+## Postman collection
+
+Generate a Postman collection from the same OpenAPI contract:
+
+```bash
+pnpm --filter @paper-app/backend docs:postman
+```
+
+The command writes `postman/paper-api.postman_collection.json`. Set its `baseUrl`
+collection variable to the environment you want to test.
