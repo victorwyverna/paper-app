@@ -13,23 +13,67 @@ API for the Paper service.
 ## Structure
 
 ```text
-src/
-├── app.ts                     # HTTP application: CORS and error handling
-├── server.ts                  # application entry point and port binding
-├── controllers/
-│   └── articles.ts            # HTTP handlers for article endpoints
-├── db/
-│   └── prisma.ts              # Prisma connection to PostgreSQL
-├── generated/                 # generated Prisma Client (do not edit manually)
-├── lib/
-│   └── http.ts                # JSON request and response helpers
-├── routes/
-│   └── index.ts               # method and URL routing
-├── schemas/
-│   └── article.ts             # Zod schemas for article input
-└── services/
-    └── article-service.ts     # article persistence and unique slug creation
+apps/backend/
+├── src/
+│   ├── app.ts                 # HTTP application: CORS and error handling
+│   ├── server.ts              # application entry point and port binding
+│   ├── controllers/
+│   │   ├── articles.ts        # HTTP handlers for article endpoints
+│   │   └── uploads.ts         # HTTP handlers for image uploads
+│   ├── db/
+│   │   └── prisma.ts          # Prisma connection to PostgreSQL
+│   ├── generated/             # generated Prisma Client (do not edit manually)
+│   ├── lib/
+│   │   └── http.ts            # JSON request and response helpers
+│   ├── openapi.ts             # OpenAPI specification and Swagger UI
+│   ├── routes/
+│   │   └── index.ts           # method and URL routing
+│   ├── schemas/
+│   │   └── article.ts         # Zod schemas for article input
+│   ├── services/
+│   │   └── article-service.ts # article persistence and unique slug creation
+│   └── storage/
+│       └── s3.ts              # MinIO / S3 client and file operations
+├── prisma/
+│   ├── migrations/            # database migrations
+│   └── schema.prisma          # Prisma data model
+├── scripts/
+│   └── generate-postman-collection.mjs
+└── postman/
+    └── paper-api.postman_collection.json
 ```
+
+## Local launch
+
+Requirements: Node.js 24 or later, pnpm 11, and Docker with Docker Compose.
+
+1. From the repository root, install dependencies and start PostgreSQL and MinIO:
+
+   ```bash
+   pnpm install
+   docker compose up -d
+   ```
+
+2. Create `apps/backend/.env` with the local service settings:
+
+   ```dotenv
+   DATABASE_URL="postgresql://paper-pg:paper-pwd@localhost:5432/paper-db"
+   S3_ENDPOINT="http://localhost:9000"
+   S3_ACCESS_KEY="paper-minio"
+   S3_SECRET_KEY="paper-pwd"
+   S3_BUCKET="paper"
+   ```
+
+   Optionally, set `PORT` (defaults to `3000`) and `FRONTEND_ORIGIN` (defaults to `http://localhost:5173`).
+
+3. Apply database migrations and start the backend:
+
+   ```bash
+   pnpm --filter @paper-app/backend db:migrate
+   pnpm --filter @paper-app/backend dev
+   ```
+
+The API will be available at [http://localhost:3000](http://localhost:3000). On startup, the backend creates the configured S3 bucket if it does not yet exist. MinIO Console is available at [http://localhost:9001](http://localhost:9001).
 
 ## API
 
