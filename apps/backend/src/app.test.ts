@@ -5,11 +5,14 @@ import assert from 'node:assert/strict';
 
 import { createApp } from './app.js';
 import { prisma } from './db/prisma.js';
+import { ensureBucket } from './storage/s3.js';
 
 const server = createApp();
 let baseUrl = '';
 
 before(async () => {
+  await ensureBucket();
+
   await new Promise<void>((resolve) => {
     server.listen(0, '127.0.0.1', resolve);
   });
@@ -396,4 +399,72 @@ test('returns 403 when deleting with an invalid edit token', async () => {
   };
 
   assert.equal(body.message, 'Invalid edit token');
+});
+
+test('uploads and returns an image', async () => {
+  const image = Buffer.from('test image content');
+
+  const uploadResponse = await fetch(`${baseUrl}/uploads`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'image/png',
+    },
+    body: image,
+  });
+
+  assert.equal(uploadResponse.status, 201);
+
+  const uploaded = (await uploadResponse.json()) as {
+    key: string;
+  };
+
+  assert.match(uploaded.key, /^[a-f0-9-]+\.png$/);
+
+  const getResponse = await fetch(`${baseUrl}/uploads/${uploaded.key}`);
+
+  assert.equal(getResponse.status, 200);
+  assert.equal(getResponse.headers.get('content-type'), 'image/png');
+
+  const returnedImage = Buffer.from(await getResponse.arrayBuffer());
+
+  assert.deepEqual(returnedImage, image);
+});
+
+test('rejects an unsupported image content type', async () => {
+  const response = await fetch(`${baseUrl}/uploads`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'text/plain',
+    },
+    body: 'not an image',
+  });
+
+  assert.equal(response.status, 415);
+
+  const body = (await response.json()) as {
+    message: string;
+  };
+
+  assert.equal(
+    body.message,
+    'Only JPEG, PNG, WebP, and GIF images are allowed',
+  );
+});
+
+test('rejects an image larger than 5 MiB', async () => {
+  const response = await fetch(`${baseUrl}/uploads`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'image/png',
+    },
+    body: Buffer.alloc(5 * 1024 * 1024 + 1),
+  });
+
+  assert.equal(response.status, 413);
+
+  const body = (await response.json()) as {
+    message: string;
+  };
+
+  assert.equal(body.message, 'Image is too large');
 });

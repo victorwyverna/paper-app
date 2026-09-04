@@ -6,6 +6,10 @@ import {
   getArticleBySlugController,
   updateArticleController,
 } from '../controllers/articles.js';
+import {
+  getImageController,
+  uploadImageController,
+} from '../controllers/uploads.js';
 import { sendJson } from '../lib/http.js';
 
 export async function routeRequest(
@@ -17,6 +21,21 @@ export async function routeRequest(
 
   if (request.method === 'POST' && pathname === '/articles') {
     await createArticleController(request, response);
+    return;
+  }
+
+  if (request.method === 'POST' && pathname === '/uploads') {
+    await uploadImageController(request, response);
+    return;
+  }
+
+  const uploadMatch = pathname.match(/^\/uploads\/([^/]+)$/);
+  const encodedKey = uploadMatch?.[1];
+
+  if (request.method === 'GET' && encodedKey) {
+    const key = decodeURIComponent(encodedKey);
+
+    await getImageController(response, key);
     return;
   }
 

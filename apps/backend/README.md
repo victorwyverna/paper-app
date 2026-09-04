@@ -39,6 +39,8 @@ src/
 | `GET` | `/articles/:slug` | Get a public article by its slug. |
 | `PATCH` | `/articles/:slug` | Update an article with `X-Edit-Token`. |
 | `DELETE` | `/articles/:slug` | Delete an article with `X-Edit-Token`. |
+| `POST` | `/uploads` | Upload a JPEG, PNG, WebP, or GIF image up to 5 MiB. |
+| `GET` | `/uploads/:key` | Get an uploaded image. |
 
 ## Editing an article
 
