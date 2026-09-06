@@ -20,8 +20,8 @@ Write. Publish. Share.
 - [x] Add protected article editing and deletion.
 - [x] Add image uploads with MinIO / S3.
 - [x] Add OpenAPI documentation, Swagger UI, and a generated Postman collection.
-- [ ] Initialize frontend application.
-- [ ] Add the frontend application shell, routing, and API client.
+- [x] Initialize frontend application.
+- [x] Add the frontend application shell, routing, and API client.
 - [ ] Build the article creation page and publish flow.
 - [ ] Build the public article viewing page.
 - [ ] Integrate the TipTap rich-text editor.

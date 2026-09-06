@@ -1,0 +1,26 @@
+.shell {
+  min-height: 100svh;
+}
+
+.header {
+  align-items: center;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  height: 4rem;
+  padding-inline: max(1.25rem, calc((100% - var(--content-width)) / 2));
+}
+
+.brand {
+  color: var(--color-text);
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  text-decoration: none;
+}
+
+.main {
+  margin-inline: auto;
+  max-width: var(--content-width);
+  padding: clamp(3rem, 8vw, 7rem) 1.25rem;
+}

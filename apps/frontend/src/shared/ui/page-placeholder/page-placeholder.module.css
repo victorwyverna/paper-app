@@ -1,0 +1,30 @@
+.page {
+  max-width: 48rem;
+}
+
+.eyebrow {
+  color: var(--color-accent);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  margin: 0 0 1rem;
+  text-transform: uppercase;
+}
+
+.title {
+  font-family: var(--font-serif);
+  font-size: clamp(3rem, 10vw, 6rem);
+  letter-spacing: -0.055em;
+  line-height: 0.95;
+  margin: 0;
+}
+
+.description {
+  color: var(--color-text-muted);
+  font-size: 1.125rem;
+  margin: 1.5rem 0 0;
+}
+
+.description a {
+  color: var(--color-accent);
+}
