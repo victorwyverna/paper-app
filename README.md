@@ -23,7 +23,7 @@ Write. Publish. Share.
 - [x] Initialize frontend application.
 - [x] Add the frontend application shell, routing, and API client.
 - [x] Build the article creation page and publish flow.
-- [ ] Build the public article viewing page.
+- [x] Build the public article viewing page.
 - [ ] Integrate the TipTap rich-text editor.
 - [ ] Add image uploads to the article editor.
 - [ ] Add token-protected article editing and deletion in the frontend.
