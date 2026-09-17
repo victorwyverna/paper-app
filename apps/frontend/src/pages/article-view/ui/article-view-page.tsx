@@ -3,10 +3,13 @@ import type { ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
 
 import { paths } from '@/app/router/lib/paths';
-import { getArticle, getArticleEditToken } from '@/entities/article';
+import {
+  ArticleContent,
+  getArticle,
+  getArticleEditToken,
+} from '@/entities/article';
 import { ApiError } from '@/shared/api';
 
-import { ArticleContent } from './article-content';
 import styles from './article-view-page.module.css';
 
 const publishedDateFormatter = new Intl.DateTimeFormat('en', {

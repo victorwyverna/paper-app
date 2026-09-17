@@ -1,0 +1,1 @@
+import './prosemirror-dom-polyfills';

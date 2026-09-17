@@ -5,6 +5,7 @@ export {
   updateArticle,
 } from './api/article-api';
 export { getArticleEditToken, saveArticleEditToken } from './model/edit-access';
+export { ArticleContent } from './ui/article-content';
 export type {
   Article,
   CreateArticleInput,

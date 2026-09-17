@@ -90,8 +90,7 @@
   padding: clamp(2rem, 6vw, 5rem) clamp(1.5rem, 8vw, 6.5rem);
 }
 
-.titleInput,
-.bodyInput {
+.titleInput {
   background: transparent;
   border: 0;
   color: var(--color-text);
@@ -111,8 +110,7 @@
   min-height: 2.05em;
 }
 
-.titleInput::placeholder,
-.bodyInput::placeholder {
+.titleInput::placeholder {
   color: #aaa69d;
   opacity: 1;
 }
@@ -145,13 +143,6 @@
   height: 1px;
   margin: 1.75rem 0 2rem;
   width: 3.5rem;
-}
-
-.bodyInput {
-  font-family: var(--font-serif);
-  font-size: clamp(1.2rem, 2vw, 1.4rem);
-  line-height: 1.75;
-  min-height: 20rem;
 }
 
 .bodyError {

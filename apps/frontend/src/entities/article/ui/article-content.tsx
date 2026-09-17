@@ -1,26 +1,10 @@
 import { Fragment, type ReactNode } from 'react';
 
-import type {
-  TiptapDocument,
-  TiptapMark,
-  TiptapNode,
-} from '@/entities/article';
+import { sanitizeHref } from '@/shared/lib/href';
 
-import styles from './article-view-page.module.css';
+import type { TiptapDocument, TiptapMark, TiptapNode } from '../model/types';
 
-function safeUrl(value: unknown): string | null {
-  if (typeof value !== 'string') {
-    return null;
-  }
-
-  const trimmed = value.trim();
-
-  if (/^(https?:|mailto:|\/|#)/i.test(trimmed)) {
-    return trimmed;
-  }
-
-  return null;
-}
+import styles from './article-content.module.css';
 
 function withMark(content: ReactNode, mark: TiptapMark): ReactNode {
   switch (mark.type) {
@@ -35,7 +19,7 @@ function withMark(content: ReactNode, mark: TiptapMark): ReactNode {
     case 'code':
       return <code>{content}</code>;
     case 'link': {
-      const href = safeUrl(mark.attrs?.href);
+      const href = sanitizeHref(mark.attrs?.href);
 
       if (!href) {
         return content;
@@ -108,7 +92,7 @@ function renderNode(node: TiptapNode, key: number): ReactNode {
     case 'horizontalRule':
       return <hr key={key} />;
     case 'image': {
-      const src = safeUrl(node.attrs?.src);
+      const src = sanitizeHref(node.attrs?.src);
 
       return src ? (
         <figure key={key}>

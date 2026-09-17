@@ -1,5 +1,5 @@
 import { useForm } from '@tanstack/react-form';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 
 import { paths } from '@/app/router/lib/paths';
@@ -8,6 +8,7 @@ import {
   saveArticleEditToken,
   type TiptapDocument,
 } from '@/entities/article';
+import { RichTextEditor } from '@/features/article-editor';
 import { ApiError } from '@/shared/api';
 
 import styles from './article-create-page.module.css';
@@ -28,26 +29,7 @@ function getFieldError(errors: readonly unknown[]): string {
   return '';
 }
 
-function textToTiptapDocument(value: string): TiptapDocument {
-  const paragraphs = value
-    .split(/\n\s*\n/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean)
-    .map((paragraph) => ({
-      type: 'paragraph',
-      content: paragraph
-        .split('\n')
-        .flatMap((line, index) => [
-          ...(index > 0 ? [{ type: 'hardBreak' }] : []),
-          ...(line ? [{ type: 'text', text: line }] : []),
-        ]),
-    }));
-
-  return {
-    type: 'doc',
-    content: paragraphs,
-  };
-}
+const EMPTY_DOCUMENT: TiptapDocument = { type: 'doc', content: [] };
 
 function getPublishError(error: unknown): string {
   if (error instanceof ApiError) {
@@ -63,12 +45,13 @@ function getPublishError(error: unknown): string {
 
 export function ArticleCreatePage() {
   const navigate = useNavigate();
+  const bodyDocument = useRef<TiptapDocument>(EMPTY_DOCUMENT);
   const [publishError, setPublishError] = useState<string | null>(null);
 
   const form = useForm({
     defaultValues: {
       title: '',
-      body: '',
+      body: true,
     },
     onSubmit: async ({ value }) => {
       setPublishError(null);
@@ -76,7 +59,7 @@ export function ArticleCreatePage() {
       try {
         const published = await createArticle({
           title: value.title.trim(),
-          content: textToTiptapDocument(value.body),
+          content: bodyDocument.current,
         });
 
         saveArticleEditToken(published.article.slug, published.editToken);
@@ -197,9 +180,9 @@ export function ArticleCreatePage() {
             name="body"
             validators={{
               onBlur: ({ value }) =>
-                value.trim() ? undefined : 'Add a few words before publishing.',
+                value ? 'Add a few words before publishing.' : undefined,
               onSubmit: ({ value }) =>
-                value.trim() ? undefined : 'Add a few words before publishing.',
+                value ? 'Add a few words before publishing.' : undefined,
             }}
           >
             {(field) => (
@@ -207,17 +190,16 @@ export function ArticleCreatePage() {
                 <label className={styles.srOnly} htmlFor={field.name}>
                   Article body
                 </label>
-                <textarea
-                  aria-describedby={`${field.name}-error`}
-                  aria-invalid={field.state.meta.errors.length > 0}
-                  className={styles.bodyInput}
+                <RichTextEditor
+                  describedBy={`${field.name}-error`}
                   id={field.name}
-                  name={field.name}
+                  invalid={field.state.meta.errors.length > 0}
                   onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                  placeholder="Tell your story…"
-                  rows={14}
-                  value={field.state.value}
+                  onChange={(document, isEmpty) => {
+                    bodyDocument.current = document;
+                    field.handleChange(isEmpty);
+                  }}
+                  value={bodyDocument.current}
                 />
                 <p
                   className={styles.bodyError}

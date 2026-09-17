@@ -84,133 +84,6 @@
   width: 3.5rem;
 }
 
-.content {
-  color: #34322d;
-  font-family: var(--font-serif);
-  font-size: clamp(1.16rem, 2vw, 1.32rem);
-  line-height: 1.78;
-  overflow-wrap: anywhere;
-}
-
-.content > :first-child {
-  margin-top: 0;
-}
-
-.content > :last-child {
-  margin-bottom: 0;
-}
-
-.content p {
-  margin: 0 0 1.65em;
-}
-
-.content h2,
-.content h3,
-.content h4,
-.content h5,
-.content h6 {
-  color: var(--color-text);
-  font-family: var(--font-sans);
-  letter-spacing: -0.035em;
-  line-height: 1.15;
-  margin: 2.2em 0 0.8em;
-}
-
-.content h2 {
-  font-size: 1.75em;
-}
-
-.content h3 {
-  font-size: 1.4em;
-}
-
-.content ul,
-.content ol {
-  margin: 0 0 1.65em;
-  padding-left: 1.4em;
-}
-
-.content li {
-  margin: 0.45em 0;
-  padding-left: 0.25em;
-}
-
-.content li > p {
-  margin: 0;
-}
-
-.content blockquote {
-  border-left: 3px solid var(--color-accent);
-  color: var(--color-text);
-  font-size: 1.18em;
-  font-style: italic;
-  margin: 2em 0;
-  padding: 0.15em 0 0.15em 1.35em;
-}
-
-.content blockquote p {
-  margin: 0;
-}
-
-.content a {
-  color: var(--color-accent);
-  text-decoration-thickness: 0.08em;
-}
-
-.content code {
-  background: #eeece6;
-  border-radius: 0.2rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.82em;
-  padding: 0.12em 0.32em;
-}
-
-.content pre {
-  background: #24231f;
-  border-radius: 0.4rem;
-  color: #f5f2e9;
-  margin: 2em 0;
-  overflow-x: auto;
-  padding: 1.35rem 1.5rem;
-}
-
-.content pre code {
-  background: transparent;
-  color: inherit;
-  padding: 0;
-}
-
-.content hr {
-  border: 0;
-  color: var(--color-border);
-  margin: 3em auto;
-  text-align: center;
-}
-
-.content hr::before {
-  content: '*  *  *';
-  letter-spacing: 0.5em;
-}
-
-.content figure {
-  margin: 2.5em 0;
-}
-
-.content img {
-  border-radius: 0.35rem;
-  display: block;
-  height: auto;
-  max-width: 100%;
-}
-
-.content figcaption {
-  color: var(--color-text-muted);
-  font-family: var(--font-sans);
-  font-size: 0.68em;
-  margin-top: 0.7rem;
-  text-align: center;
-}
-
 .articleFooter {
   align-items: center;
   border-top: 1px solid var(--color-border);
@@ -299,8 +172,7 @@
 
 .editLink:focus-visible,
 .stateLink:focus-visible,
-.retryButton:focus-visible,
-.content a:focus-visible {
+.retryButton:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
   outline-offset: 3px;
 }
@@ -315,15 +187,6 @@
 @media (max-width: 40rem) {
   .title {
     font-size: clamp(2.8rem, 15vw, 4.5rem);
-  }
-
-  .content {
-    line-height: 1.7;
-  }
-
-  .content blockquote {
-    margin-left: 0;
-    padding-left: 1rem;
   }
 }
 
