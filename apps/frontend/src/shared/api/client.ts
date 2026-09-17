@@ -4,6 +4,7 @@ import { ApiError } from './api-error';
 
 type ApiRequestOptions = Omit<RequestInit, 'body'> & {
   body?: unknown;
+  rawBody?: BodyInit;
 };
 
 function getRequestUrl(path: string): string {
@@ -43,11 +44,15 @@ function getErrorMessage(body: unknown, statusText: string): string {
 
 async function request<T>(
   path: string,
-  { body, headers: initialHeaders, ...init }: ApiRequestOptions = {}
+  { body, rawBody, headers: initialHeaders, ...init }: ApiRequestOptions = {}
 ): Promise<T> {
   const headers = new Headers(initialHeaders);
 
-  if (body !== undefined && !headers.has('Content-Type')) {
+  if (
+    body !== undefined &&
+    rawBody === undefined &&
+    !headers.has('Content-Type')
+  ) {
     headers.set('Content-Type', 'application/json');
   }
 
@@ -57,7 +62,12 @@ async function request<T>(
     response = await fetch(getRequestUrl(path), {
       ...init,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body:
+        rawBody !== undefined
+          ? rawBody
+          : body === undefined
+            ? undefined
+            : JSON.stringify(body),
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
@@ -89,4 +99,15 @@ export const apiClient = {
     request<T>(path, { ...options, method: 'PATCH', body }),
   post: <T>(path: string, body: unknown, options?: ApiRequestOptions) =>
     request<T>(path, { ...options, method: 'POST', body }),
+  postFile<T>(path: string, file: File, options?: ApiRequestOptions) {
+    const headers = new Headers(options?.headers);
+    headers.set('Content-Type', file.type);
+
+    return request<T>(path, {
+      ...options,
+      method: 'POST',
+      headers,
+      rawBody: file,
+    });
+  },
 };

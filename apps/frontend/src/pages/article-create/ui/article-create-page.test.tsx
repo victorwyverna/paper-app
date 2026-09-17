@@ -49,6 +49,88 @@ afterEach(() => {
 });
 
 describe('ArticleCreatePage', () => {
+  test('uploads an image and publishes its URL in the TipTap document', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ key: 'uploaded-image.png' }), {
+          status: 201,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+      .mockResolvedValueOnce(createdArticleResponse());
+    vi.stubGlobal('fetch', fetchMock);
+    renderPage();
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Article title' }), {
+      target: { value: 'A story with an image' },
+    });
+    fireEvent.change(screen.getByLabelText('Choose an image'), {
+      target: {
+        files: [
+          new File(['image bytes'], 'paper boat.png', { type: 'image/png' }),
+        ],
+      },
+    });
+
+    const image = (await screen.findByRole('img', {
+      name: 'paper boat.png',
+    })) as HTMLImageElement;
+    expect(image.getAttribute('src')).toBe(
+      'http://localhost:3000/uploads/uploaded-image.png'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+
+    await screen.findByText('Published');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('http://localhost:3000/uploads');
+
+    const uploadRequest = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(uploadRequest.method).toBe('POST');
+    expect(uploadRequest.body).toBeInstanceOf(File);
+
+    const [, publishRequest] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(JSON.parse(String(publishRequest.body))).toEqual({
+      title: 'A story with an image',
+      content: {
+        type: 'doc',
+        content: [
+          {
+            type: 'image',
+            attrs: {
+              src: 'http://localhost:3000/uploads/uploaded-image.png',
+              alt: 'paper boat.png',
+              title: null,
+              width: null,
+              height: null,
+            },
+          },
+          { type: 'paragraph' },
+        ],
+      },
+    });
+  });
+
+  test('shows an upload error without inserting an image', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ message: 'Image is too large' }), {
+        status: 413,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    renderPage();
+
+    fireEvent.change(screen.getByLabelText('Choose an image'), {
+      target: {
+        files: [new File(['oversized'], 'huge.png', { type: 'image/png' })],
+      },
+    });
+
+    expect(await screen.findByText('Image is too large')).toBeTruthy();
+    expect(screen.queryByRole('img')).toBeNull();
+  });
+
   test('publishes TipTap JSON from the rich-text editor', async () => {
     const fetchMock = vi.fn().mockResolvedValue(createdArticleResponse());
     vi.stubGlobal('fetch', fetchMock);

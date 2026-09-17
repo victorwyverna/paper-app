@@ -25,7 +25,7 @@ Write. Publish. Share.
 - [x] Build the article creation page and publish flow.
 - [x] Build the public article viewing page.
 - [x] Integrate the TipTap rich-text editor.
-- [ ] Add image uploads to the article editor.
+- [x] Add image uploads to the article editor.
 - [ ] Add token-protected article editing and deletion in the frontend.
 
 ## Additional steps

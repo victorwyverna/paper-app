@@ -53,6 +53,16 @@
   opacity: 0.32;
 }
 
+.fileInput {
+  display: none;
+}
+
+.uploadError {
+  color: var(--color-danger, #a23b32);
+  font-size: 0.85rem;
+  margin: -0.6rem 0 1rem;
+}
+
 .content {
   color: var(--color-text);
   font-family: var(--font-serif);
@@ -110,6 +120,14 @@
 .content a {
   color: var(--color-accent);
   cursor: pointer;
+}
+
+.content img {
+  border-radius: 0.35rem;
+  display: block;
+  height: auto;
+  margin: 2rem 0;
+  max-width: 100%;
 }
 
 .content hr {

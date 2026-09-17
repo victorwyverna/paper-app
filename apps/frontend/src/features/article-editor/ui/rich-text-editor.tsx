@@ -1,12 +1,16 @@
+import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import Underline from '@tiptap/extension-underline';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { useEffect, useReducer } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 
 import type { TiptapDocument } from '@/entities/article';
 
+import { ApiError } from '@/shared/api';
 import { normalizeHrefInput } from '@/shared/lib/href';
+
+import { uploadImage } from '../api/upload-image';
 
 import styles from './rich-text-editor.module.css';
 
@@ -58,6 +62,9 @@ export function RichTextEditor({
   value,
 }: RichTextEditorProps) {
   const [, rerenderToolbar] = useReducer((version: number) => version + 1, 0);
+  const imageInput = useRef<HTMLInputElement>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const editor = useEditor({
     content: value,
     extensions: [
@@ -71,6 +78,7 @@ export function RichTextEditor({
         defaultProtocol: 'https',
         openOnClick: false,
       }),
+      Image.configure({ allowBase64: false }),
       Underline,
     ],
     editorProps: {
@@ -86,8 +94,10 @@ export function RichTextEditor({
     immediatelyRender: false,
     onBlur,
     onUpdate: ({ editor: currentEditor }) => {
-      const isEmpty = currentEditor.getText().trim().length === 0;
-      onChange(currentEditor.getJSON() as TiptapDocument, isEmpty);
+      const document = currentEditor.getJSON() as TiptapDocument;
+      const hasImage = document.content.some((node) => node.type === 'image');
+      const isEmpty = currentEditor.getText().trim().length === 0 && !hasImage;
+      onChange(document, isEmpty);
     },
   });
 
@@ -153,6 +163,28 @@ export function RichTextEditor({
       .extendMarkRange('link')
       .setLink({ href: normalizedHref, target: '_blank' })
       .run();
+  };
+
+  const addImage = async (file: File) => {
+    if (!editor) {
+      return;
+    }
+
+    setUploadError(null);
+    setUploadingImage(true);
+
+    try {
+      const src = await uploadImage(file);
+      editor.chain().focus().setImage({ src, alt: file.name }).run();
+    } catch (error) {
+      setUploadError(
+        error instanceof ApiError
+          ? error.message
+          : 'The image could not be uploaded. Try again.'
+      );
+    } finally {
+      setUploadingImage(false);
+    }
   };
 
   const unavailable = editor === null;
@@ -270,6 +302,28 @@ export function RichTextEditor({
           >
             Link
           </ToolbarButton>
+          <ToolbarButton
+            disabled={unavailable || uploadingImage}
+            label="Image"
+            onClick={() => imageInput.current?.click()}
+          >
+            {uploadingImage ? 'Uploading…' : 'Image'}
+          </ToolbarButton>
+          <input
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            aria-label="Choose an image"
+            className={styles.fileInput}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+
+              if (file) {
+                void addImage(file);
+              }
+            }}
+            ref={imageInput}
+            type="file"
+          />
         </div>
 
         <div className={styles.toolbarGroup}>
@@ -289,6 +343,12 @@ export function RichTextEditor({
           </ToolbarButton>
         </div>
       </div>
+
+      {uploadError ? (
+        <p className={styles.uploadError} role="alert">
+          {uploadError}
+        </p>
+      ) : null}
 
       <EditorContent editor={editor} />
     </div>
