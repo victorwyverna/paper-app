@@ -1,0 +1,299 @@
+.page {
+  margin-inline: auto;
+  max-width: 58rem;
+}
+
+.pageHeader {
+  align-items: end;
+  display: flex;
+  gap: 2rem;
+  justify-content: space-between;
+  margin-bottom: 2rem;
+}
+
+.eyebrow {
+  color: var(--color-accent);
+  font-size: 0.75rem;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+  margin: 0 0 0.35rem;
+  text-transform: uppercase;
+}
+
+.intro {
+  color: var(--color-text-muted);
+  font-family: var(--font-serif);
+  font-size: clamp(1.1rem, 2vw, 1.35rem);
+  margin: 0;
+}
+
+.headerActions,
+.deleteActions {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+}
+
+.viewLink {
+  color: var(--color-text-muted);
+  font-size: 0.84rem;
+  font-weight: 650;
+}
+
+.saveButton,
+.retryButton {
+  align-items: center;
+  background: var(--color-text);
+  border: 0;
+  border-radius: 999px;
+  color: var(--color-background);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.875rem;
+  font-weight: 700;
+  gap: 0.55rem;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.7rem 1.15rem;
+  transition:
+    background-color 160ms ease,
+    transform 160ms ease;
+}
+
+.saveButton:hover:not(:disabled),
+.retryButton:hover {
+  background: var(--color-accent);
+  transform: translateY(-1px);
+}
+
+.saveButton:disabled,
+.deleteButton:disabled,
+.cancelButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.spinner,
+.loadingMark {
+  animation: spin 700ms linear infinite;
+  border: 2px solid rgb(255 255 255 / 35%);
+  border-radius: 50%;
+  border-top-color: currentColor;
+  height: 1rem;
+  width: 1rem;
+}
+
+.paper {
+  background:
+    linear-gradient(rgb(255 255 255 / 82%), rgb(255 255 255 / 82%)),
+    var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: 0.4rem;
+  box-shadow: 0 1.5rem 4rem rgb(48 43 35 / 7%);
+  min-height: 42rem;
+  padding: clamp(2rem, 6vw, 5rem) clamp(1.5rem, 8vw, 6.5rem);
+}
+
+.titleInput {
+  background: transparent;
+  border: 0;
+  color: var(--color-text);
+  display: block;
+  font-family: var(--font-serif);
+  font-size: clamp(2.5rem, 6vw, 4.6rem);
+  font-weight: 700;
+  letter-spacing: -0.055em;
+  line-height: 0.98;
+  min-height: 2.05em;
+  outline: none;
+  padding: 0;
+  resize: none;
+  width: 100%;
+}
+
+.titleInput:focus-visible {
+  border-radius: 0.2rem;
+  outline: 3px solid color-mix(in srgb, var(--color-accent) 24%, transparent);
+  outline-offset: 0.35rem;
+}
+
+.fieldError,
+.actionError {
+  color: #a33c32;
+  font-size: 0.78rem;
+}
+
+.fieldError {
+  margin: 0.55rem 0 0;
+  min-height: 1.2rem;
+}
+
+.rule {
+  background: var(--color-border);
+  height: 1px;
+  margin: 1.2rem 0 2rem;
+  width: 3.5rem;
+}
+
+.editorFooter {
+  align-items: start;
+  display: flex;
+  gap: 2rem;
+  justify-content: space-between;
+  padding: 1.25rem 0 0;
+}
+
+.protectionNote,
+.actionError {
+  line-height: 1.55;
+  margin: 0;
+}
+
+.protectionNote {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  max-width: 29rem;
+}
+
+.actionError {
+  font-weight: 650;
+  margin-top: 0.6rem;
+  max-width: 30rem;
+}
+
+.deleteTrigger,
+.cancelButton,
+.deleteButton {
+  background: transparent;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.62rem 0.9rem;
+}
+
+.deleteTrigger {
+  border: 1px solid #d8bbb7;
+  color: #8f352e;
+}
+
+.deleteConfirmation {
+  background: #fff5f2;
+  border: 1px solid #e5b8b1;
+  border-radius: 0.45rem;
+  max-width: 30rem;
+  padding: 1rem;
+}
+
+.deleteConfirmation strong {
+  font-family: var(--font-serif);
+}
+
+.deleteConfirmation p {
+  color: #80534e;
+  font-size: 0.78rem;
+  margin: 0.2rem 0 0.85rem;
+}
+
+.deleteButton {
+  background: #963b32;
+  border: 1px solid #963b32;
+  color: #fff;
+}
+
+.cancelButton {
+  border: 1px solid #d8bbb7;
+  color: var(--color-text);
+}
+
+.statePage {
+  max-width: 48rem;
+}
+
+.stateTitle {
+  font-family: var(--font-serif);
+  font-size: clamp(3rem, 10vw, 6rem);
+  letter-spacing: -0.055em;
+  line-height: 0.95;
+  margin: 0;
+}
+
+.stateDescription {
+  color: var(--color-text-muted);
+  font-size: 1.125rem;
+  margin: 1.5rem 0;
+  max-width: 38rem;
+}
+
+.stateLink {
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+.retryButton {
+  margin-top: 0.25rem;
+}
+
+.loading {
+  align-items: center;
+  color: var(--color-text-muted);
+  display: flex;
+  gap: 0.8rem;
+  min-height: 45vh;
+  justify-content: center;
+}
+
+.loadingMark {
+  border-color: color-mix(in srgb, var(--color-accent) 22%, transparent);
+  border-top-color: var(--color-accent);
+}
+
+.srOnly {
+  clip: rect(0, 0, 0, 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 40rem) {
+  .pageHeader,
+  .editorFooter {
+    display: block;
+  }
+
+  .headerActions {
+    justify-content: space-between;
+    margin-top: 1.25rem;
+  }
+
+  .paper {
+    min-height: 36rem;
+  }
+
+  .deleteTrigger,
+  .deleteConfirmation {
+    margin-top: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .saveButton,
+  .retryButton {
+    transition: none;
+  }
+
+  .spinner,
+  .loadingMark {
+    animation-duration: 1.4s;
+  }
+}

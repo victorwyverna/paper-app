@@ -4,7 +4,11 @@ export {
   getArticle,
   updateArticle,
 } from './api/article-api';
-export { getArticleEditToken, saveArticleEditToken } from './model/edit-access';
+export {
+  getArticleEditToken,
+  removeArticleEditToken,
+  saveArticleEditToken,
+} from './model/edit-access';
 export { ArticleContent } from './ui/article-content';
 export type {
   Article,

@@ -20,3 +20,12 @@ export function getArticleEditToken(slug: string): string | null {
     return null;
   }
 }
+
+export function removeArticleEditToken(slug: string): boolean {
+  try {
+    window.localStorage.removeItem(editTokenKey(slug));
+    return true;
+  } catch {
+    return false;
+  }
+}
