@@ -7,7 +7,7 @@ Write. Publish. Share.
 - **Frontend:** React, TypeScript, Vite, React Router, TanStack Query, TanStack Form, TipTap;
 - **Backend:** Node.js, TypeScript, build-in HTTP-server, Prisma, Zod;
 - **Data and files:** PostgreSQL and MinIO (S3-compatible storage);
-- **Production:** Docker Compose, Nginx, and Caddy with automatic HTTPS.
+- **Planned production:** Docker Compose, Nginx, and Caddy with automatic HTTPS.
 
 ## Steps
 
@@ -31,6 +31,19 @@ Write. Publish. Share.
 ## Additional steps
 
 - [ ] Add error output to popup notifications.
+
+## Quality hardening
+
+- [x] Make workspace quality commands fail when application tasks are missing.
+- [x] Add CI for formatting, linting, type checking, tests, and builds.
+- [ ] Enforce a strict and bounded TipTap document schema.
+- [ ] Make article slug creation race-safe.
+- [ ] Store only edit-token hashes and add recovery UX.
+- [ ] Validate uploaded image content and track upload lifecycle.
+
+### Definition of Done
+
+A hardening item is complete when its behavior and failure modes are defined, material paths have automated tests, formatting/lint/type checks/tests/build pass, and user-facing or operational behavior is documented. A command that succeeds without executing its intended tasks does not count as passing.
 
 ## Production checklist
 
