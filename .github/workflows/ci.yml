@@ -72,8 +72,14 @@ jobs:
       - name: Type check
         run: pnpm check-types
 
-      - name: Test
-        run: pnpm test
+      - name: Test preflight
+        run: node --test scripts/*.test.mjs && node scripts/assert-workspace-task.mjs test
+
+      - name: Frontend tests
+        run: pnpm --filter @paper-app/frontend test
+
+      - name: Backend integration tests
+        run: pnpm --filter @paper-app/backend test
 
       - name: Build
         run: pnpm build
