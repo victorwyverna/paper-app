@@ -73,7 +73,7 @@ test('creates an article and returns it publicly by slug', async () => {
   assert.match(created.editToken, /^[a-f0-9]{64}$/);
 
   const getResponse = await fetch(
-    `${baseUrl}/articles/${created.article.slug}`,
+    `${baseUrl}/articles/${created.article.slug}`
   );
 
   assert.equal(getResponse.status, 200);
@@ -117,7 +117,7 @@ test('returns 400 when creating an article with invalid data', async () => {
 
 test('returns 404 for an unknown article slug', async () => {
   const response = await fetch(
-    `${baseUrl}/articles/article-that-does-not-exist-${randomUUID()}`,
+    `${baseUrl}/articles/article-that-does-not-exist-${randomUUID()}`
   );
 
   assert.equal(response.status, 404);
@@ -212,7 +212,7 @@ test('updates an article with a valid edit token', async () => {
       body: JSON.stringify({
         title: updatedTitle,
       }),
-    },
+    }
   );
 
   assert.equal(updateResponse.status, 200);
@@ -226,7 +226,7 @@ test('updates an article with a valid edit token', async () => {
   assert.equal(updatedArticle.title, updatedTitle);
 
   const getResponse = await fetch(
-    `${baseUrl}/articles/${created.article.slug}`,
+    `${baseUrl}/articles/${created.article.slug}`
   );
 
   const publicArticle = (await getResponse.json()) as {
@@ -237,18 +237,15 @@ test('updates an article with a valid edit token', async () => {
 });
 
 test('returns 401 when updating without an edit token', async () => {
-  const response = await fetch(
-    `${baseUrl}/articles/article-${randomUUID()}`,
-    {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        title: 'Updated title',
-      }),
+  const response = await fetch(`${baseUrl}/articles/article-${randomUUID()}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
     },
-  );
+    body: JSON.stringify({
+      title: 'Updated title',
+    }),
+  });
 
   assert.equal(response.status, 401);
 
@@ -280,19 +277,16 @@ test('returns 403 when updating with an invalid edit token', async () => {
     };
   };
 
-  const response = await fetch(
-    `${baseUrl}/articles/${created.article.slug}`,
-    {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Edit-Token': 'invalid-token',
-      },
-      body: JSON.stringify({
-        title: 'Attempted update',
-      }),
+  const response = await fetch(`${baseUrl}/articles/${created.article.slug}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Edit-Token': 'invalid-token',
     },
-  );
+    body: JSON.stringify({
+      title: 'Attempted update',
+    }),
+  });
 
   assert.equal(response.status, 403);
 
@@ -332,25 +326,22 @@ test('deletes an article with a valid edit token', async () => {
       headers: {
         'X-Edit-Token': created.editToken,
       },
-    },
+    }
   );
 
   assert.equal(deleteResponse.status, 204);
 
   const getResponse = await fetch(
-    `${baseUrl}/articles/${created.article.slug}`,
+    `${baseUrl}/articles/${created.article.slug}`
   );
 
   assert.equal(getResponse.status, 404);
 });
 
 test('returns 401 when deleting without an edit token', async () => {
-  const response = await fetch(
-    `${baseUrl}/articles/article-${randomUUID()}`,
-    {
-      method: 'DELETE',
-    },
-  );
+  const response = await fetch(`${baseUrl}/articles/article-${randomUUID()}`, {
+    method: 'DELETE',
+  });
 
   assert.equal(response.status, 401);
 
@@ -382,15 +373,12 @@ test('returns 403 when deleting with an invalid edit token', async () => {
     };
   };
 
-  const response = await fetch(
-    `${baseUrl}/articles/${created.article.slug}`,
-    {
-      method: 'DELETE',
-      headers: {
-        'X-Edit-Token': 'invalid-token',
-      },
+  const response = await fetch(`${baseUrl}/articles/${created.article.slug}`, {
+    method: 'DELETE',
+    headers: {
+      'X-Edit-Token': 'invalid-token',
     },
-  );
+  });
 
   assert.equal(response.status, 403);
 
@@ -447,7 +435,7 @@ test('rejects an unsupported image content type', async () => {
 
   assert.equal(
     body.message,
-    'Only JPEG, PNG, WebP, and GIF images are allowed',
+    'Only JPEG, PNG, WebP, and GIF images are allowed'
   );
 });
 

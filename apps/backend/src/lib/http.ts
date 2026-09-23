@@ -12,7 +12,7 @@ export class PayloadTooLargeError extends Error {
 export function sendJson(
   response: ServerResponse,
   statusCode: number,
-  data: unknown,
+  data: unknown
 ): void {
   response.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=utf-8',
@@ -23,7 +23,7 @@ export function sendJson(
 
 async function readBody(
   request: IncomingMessage,
-  maxBodySize: number,
+  maxBodySize: number
 ): Promise<Buffer> {
   const chunks: Buffer[] = [];
   let bodySize = 0;
@@ -47,16 +47,12 @@ async function readBody(
   return Buffer.concat(chunks);
 }
 
-export async function readJsonBody(
-  request: IncomingMessage,
-): Promise<unknown> {
+export async function readJsonBody(request: IncomingMessage): Promise<unknown> {
   const body = await readBody(request, maxJsonBodySize);
 
   return JSON.parse(body.toString('utf8'));
 }
 
-export async function readImageBody(
-  request: IncomingMessage,
-): Promise<Buffer> {
+export async function readImageBody(request: IncomingMessage): Promise<Buffer> {
   return readBody(request, maxUploadBodySize);
 }

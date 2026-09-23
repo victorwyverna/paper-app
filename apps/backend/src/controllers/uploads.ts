@@ -1,15 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-import {
-  PayloadTooLargeError,
-  readImageBody,
-  sendJson,
-} from '../lib/http.js';
-import {
-  getFile,
-  uploadFile
-} from '../storage/s3.js';
+import { PayloadTooLargeError, readImageBody, sendJson } from '../lib/http.js';
+import { getFile, uploadFile } from '../storage/s3.js';
 
 const imageExtensions = new Map([
   ['image/jpeg', 'jpg'],
@@ -20,7 +13,7 @@ const imageExtensions = new Map([
 
 export async function uploadImageController(
   request: IncomingMessage,
-  response: ServerResponse,
+  response: ServerResponse
 ): Promise<void> {
   const contentTypeHeader = request.headers['content-type'];
   const contentType =
@@ -60,7 +53,7 @@ export async function uploadImageController(
 
 export async function getImageController(
   response: ServerResponse,
-  key: string,
+  key: string
 ): Promise<void> {
   const file = await getFile(key);
 

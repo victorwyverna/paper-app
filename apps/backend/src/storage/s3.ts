@@ -40,7 +40,7 @@ export async function ensureBucket(): Promise<void> {
 export async function uploadFile(
   key: string,
   body: Buffer,
-  contentType: string,
+  contentType: string
 ): Promise<void> {
   await s3.send(
     new PutObjectCommand({
@@ -48,7 +48,7 @@ export async function uploadFile(
       Key: key,
       Body: body,
       ContentType: contentType,
-    }),
+    })
   );
 }
 
@@ -58,7 +58,7 @@ export async function getFile(key: string) {
       new GetObjectCommand({
         Bucket: bucket,
         Key: key,
-      }),
+      })
     );
 
     if (!result.Body) {

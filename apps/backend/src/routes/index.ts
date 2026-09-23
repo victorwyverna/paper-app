@@ -15,7 +15,7 @@ import { openApiDocument, swaggerUiHtml } from '../openapi.js';
 
 export async function routeRequest(
   request: IncomingMessage,
-  response: ServerResponse,
+  response: ServerResponse
 ): Promise<void> {
   const url = new URL(request.url ?? '/', 'http://localhost');
   const { pathname } = url;

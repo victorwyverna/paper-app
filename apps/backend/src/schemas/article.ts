@@ -3,10 +3,12 @@ import { z } from 'zod';
 type TiptapNode = {
   type: string;
   attrs?: Record<string, unknown> | undefined;
-  marks?: Array<{
-    type: string;
-    attrs?: Record<string, unknown> | undefined;
-  }> | undefined;
+  marks?:
+    | Array<{
+        type: string;
+        attrs?: Record<string, unknown> | undefined;
+      }>
+    | undefined;
   text?: string | undefined;
   content?: TiptapNode[] | undefined;
 };
@@ -27,7 +29,7 @@ const tiptapNodeSchema: z.ZodType<TiptapNode> = z.lazy(() =>
       text: z.string().optional(),
       content: z.array(tiptapNodeSchema).optional(),
     })
-    .loose(),
+    .loose()
 );
 
 const tiptapDocumentSchema = z
@@ -47,12 +49,9 @@ export const updateArticleSchema = z
     title: z.string().trim().min(1).max(200).optional(),
     content: tiptapDocumentSchema.optional(),
   })
-  .refine(
-    (data) => data.title !== undefined || data.content !== undefined,
-    {
-      message: 'At least one field is required',
-    },
-  );
+  .refine((data) => data.title !== undefined || data.content !== undefined, {
+    message: 'At least one field is required',
+  });
 
 export type UpdateArticleInput = z.infer<typeof updateArticleSchema>;
 

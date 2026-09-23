@@ -1,24 +1,20 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-import {
-  PayloadTooLargeError,
-  readJsonBody,
-  sendJson,
-} from '../lib/http.js';
+import { PayloadTooLargeError, readJsonBody, sendJson } from '../lib/http.js';
 import {
   createArticleSchema,
-  updateArticleSchema
+  updateArticleSchema,
 } from '../schemas/article.js';
 import {
   createArticle,
   getArticleBySlug,
   updateArticle,
-  deleteArticle
+  deleteArticle,
 } from '../services/article-service.js';
 
 export async function createArticleController(
   request: IncomingMessage,
-  response: ServerResponse,
+  response: ServerResponse
 ): Promise<void> {
   let body: unknown;
 
@@ -56,7 +52,7 @@ export async function createArticleController(
 
 export async function getArticleBySlugController(
   response: ServerResponse,
-  slug: string,
+  slug: string
 ): Promise<void> {
   const article = await getArticleBySlug(slug);
 
@@ -71,7 +67,7 @@ export async function getArticleBySlugController(
 export async function updateArticleController(
   request: IncomingMessage,
   response: ServerResponse,
-  slug: string,
+  slug: string
 ): Promise<void> {
   const editToken = request.headers['x-edit-token'];
 
@@ -122,7 +118,7 @@ export async function updateArticleController(
 export async function deleteArticleController(
   request: IncomingMessage,
   response: ServerResponse,
-  slug: string,
+  slug: string
 ): Promise<void> {
   const editToken = request.headers['x-edit-token'];
 

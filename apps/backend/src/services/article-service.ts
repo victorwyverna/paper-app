@@ -60,7 +60,7 @@ export async function getArticleBySlug(slug: string) {
 export async function updateArticle(
   slug: string,
   editToken: string,
-  input: UpdateArticleInput,
+  input: UpdateArticleInput
 ) {
   const result = await prisma.article.updateMany({
     where: {
@@ -87,7 +87,7 @@ export async function updateArticle(
 
 export async function deleteArticle(
   slug: string,
-  editToken: string,
+  editToken: string
 ): Promise<boolean> {
   const result = await prisma.article.deleteMany({
     where: {
