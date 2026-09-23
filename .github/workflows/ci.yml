@@ -46,7 +46,7 @@ jobs:
           --publish 9000:9000
           --env MINIO_ROOT_USER=paper-minio
           --env MINIO_ROOT_PASSWORD=paper-pwd
-          minio/minio:RELEASE.2025-09-07T16-13-09Z
+          quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
           server /data
 
       - name: Wait for MinIO
