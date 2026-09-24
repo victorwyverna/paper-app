@@ -73,7 +73,7 @@
 - Produces `generateEditToken(): string` and `hashEditToken(editToken: string): string` for the article service.
 - Depends only on `node:crypto`; it does not know about Prisma, HTTP headers, articles, or response serialization.
 
-- [ ] **Step 1: Write the failing crypto tests**
+- [x] **Step 1: Write the failing crypto tests**
 
 Create `apps/backend/src/services/edit-token.test.ts`:
 
@@ -102,7 +102,7 @@ test("hashes the exact UTF-8 token string as lowercase SHA-256 hexadecimal", () 
 });
 ```
 
-- [ ] **Step 2: Run the focused unit test and verify RED**
+- [x] **Step 2: Run the focused unit test and verify RED**
 
 Run:
 
@@ -112,7 +112,7 @@ pnpm --filter @paper-app/backend exec tsx --test src/services/edit-token.test.ts
 
 Expected: FAIL because `./edit-token.js` does not exist. This is the RED proof; do not create the implementation before observing it.
 
-- [ ] **Step 3: Implement the minimal crypto module**
+- [x] **Step 3: Implement the minimal crypto module**
 
 Create `apps/backend/src/services/edit-token.ts`:
 
@@ -130,13 +130,13 @@ export function hashEditToken(editToken: string): string {
 
 Keep the module deliberately small. Do not add salts, password-hashing dependencies, token parsing, validation, or logging; the design relies on 256 bits of random entropy and exact-string hashing.
 
-- [ ] **Step 4: Run the focused unit test and verify GREEN**
+- [x] **Step 4: Run the focused unit test and verify GREEN**
 
 Run the Step 2 command again.
 
 Expected: both crypto tests PASS.
 
-- [ ] **Step 5: Commit the crypto boundary**
+- [x] **Step 5: Commit the crypto boundary**
 
 ```bash
 git add apps/backend/src/services/edit-token.ts apps/backend/src/services/edit-token.test.ts
@@ -158,7 +158,7 @@ git commit -m "test: specify edit token cryptography"
 - Consumes the existing `postArticle()` helper, which clones each successful response and records the raw token for verified cleanup.
 - Produces database-backed acceptance tests that Tasks 3 and 4 must make pass.
 
-- [ ] **Step 1: Import the digest helper in the integration suite**
+- [x] **Step 1: Import the digest helper in the integration suite**
 
 Add beside the other local imports in `apps/backend/src/app.test.ts`:
 
@@ -166,7 +166,7 @@ Add beside the other local imports in `apps/backend/src/app.test.ts`:
 import { hashEditToken } from "./services/edit-token.js";
 ```
 
-- [ ] **Step 2: Strengthen the create/get test's disclosure assertions**
+- [x] **Step 2: Strengthen the create/get test's disclosure assertions**
 
 In `creates an article and returns it publicly by slug`, type the create body with optional credential fields on both levels and add exact boundary assertions:
 
@@ -215,7 +215,7 @@ assert.equal(article.editToken, undefined);
 assert.equal(article.editTokenHash, undefined);
 ```
 
-- [ ] **Step 3: Add a database-storage contract test**
+- [x] **Step 3: Add a database-storage contract test**
 
 Add after the create/get test. Query by slug with parameterized raw SQL so the test reaches runtime and fails against the pre-migration database instead of being blocked by the old generated Prisma type:
 
@@ -254,7 +254,7 @@ test("stores only a required lowercase SHA-256 edit-token digest", async () => {
 });
 ```
 
-- [ ] **Step 4: Prove the stored digest is not accepted as the header credential**
+- [x] **Step 4: Prove the stored digest is not accepted as the header credential**
 
 Add this integration test after the existing valid update test:
 
@@ -285,7 +285,7 @@ test("hashes X-Edit-Token before the update lookup", async () => {
 
 The existing valid PATCH and DELETE tests already prove the raw token still authorizes after hashing. Keep them; do not replace them with unit mocks.
 
-- [ ] **Step 5: Assert PATCH does not disclose either credential representation**
+- [x] **Step 5: Assert PATCH does not disclose either credential representation**
 
 Extend the response type and assertions in `updates an article with a valid edit token`:
 
@@ -301,7 +301,7 @@ assert.equal(updatedArticle.editToken, undefined);
 assert.equal(updatedArticle.editTokenHash, undefined);
 ```
 
-- [ ] **Step 6: Run only the Phase 4 integration cases and verify RED**
+- [x] **Step 6: Run only the Phase 4 integration cases and verify RED**
 
 Run:
 
@@ -313,7 +313,7 @@ pnpm --filter @paper-app/backend exec tsx --test \
 
 Expected: the new storage test FAILS because PostgreSQL has no `editTokenHash` column. The hash-as-header test may fail or pass for the old direct-comparison implementation depending on the stored value, but the suite as a whole must be RED for the missing persistence contract. Confirm the cleanup hook still removes every test-created article.
 
-- [ ] **Step 7: Commit the RED integration specification**
+- [x] **Step 7: Commit the RED integration specification**
 
 ```bash
 git add apps/backend/src/app.test.ts
@@ -339,7 +339,7 @@ Do not include schema, migration, generated-client, or service implementation ch
 - Preserves all other Article columns and indexes.
 - Gives every legacy row a unique placeholder value before enforcing `NOT NULL`; no old plaintext value is hashed into a still-valid credential.
 
-- [ ] **Step 1: Change the Prisma model**
+- [x] **Step 1: Change the Prisma model**
 
 Replace only the credential field in `apps/backend/prisma/schema.prisma`:
 
@@ -357,7 +357,7 @@ model Article {
 
 Do not retain an ignored, mapped, nullable, or compatibility `editToken` field.
 
-- [ ] **Step 2: Add the atomic migration**
+- [x] **Step 2: Add the atomic migration**
 
 Create `apps/backend/prisma/migrations/20260924000000_hash_edit_tokens/migration.sql`:
 
@@ -390,7 +390,7 @@ COMMIT;
 
 The two random UUID values are ephemeral migration input. Only their SHA-256 digest remains, so no known header value can reproduce a placeholder. The update intentionally ignores both null and non-null legacy plaintext tokens. Do not add `pgcrypto`, copy/hash `editToken`, or leave both columns available at any point after the transaction commits.
 
-- [ ] **Step 3: Format the schema and regenerate the committed client**
+- [x] **Step 3: Format the schema and regenerate the committed client**
 
 Run:
 
@@ -401,7 +401,7 @@ pnpm --filter @paper-app/backend exec prisma generate
 
 Expected: generated Article inputs, payloads, scalar enums, runtime schema, and model types contain `editTokenHash`; `rg -n '\beditToken\b' apps/backend/src/generated/prisma` returns no matches.
 
-- [ ] **Step 4: Apply the migration to the development/test database**
+- [x] **Step 4: Apply the migration to the development/test database**
 
 Run:
 
@@ -411,7 +411,7 @@ pnpm --filter @paper-app/backend db:migrate
 
 Expected: Prisma applies `20260924000000_hash_edit_tokens` successfully even if the local Article table already contains development rows.
 
-- [ ] **Step 5: Verify migration behavior on a populated throwaway database**
+- [x] **Step 5: Verify migration behavior on a populated throwaway database**
 
 Use the running PostgreSQL 18 service and an explicitly named disposable database. First recreate it and apply only the Phase 1 baseline migration:
 
@@ -443,13 +443,13 @@ Remove only the explicitly named throwaway database after the assertions:
 docker compose exec -T postgres dropdb -U paper-pg paper-phase4-migration-test
 ```
 
-- [ ] **Step 6: Run the focused integration test and observe the remaining RED**
+- [x] **Step 6: Run the focused integration test and observe the remaining RED**
 
 Run the Task 2 Step 6 command.
 
 Expected: application creation now FAILS because `article-service.ts` still writes the removed `editToken` field. This is the second RED boundary; the schema and migration exist, but the runtime has not yet been adapted.
 
-- [ ] **Step 7: Commit the schema and migration**
+- [x] **Step 7: Commit the schema and migration**
 
 ```bash
 git add apps/backend/prisma apps/backend/src/generated/prisma
@@ -472,7 +472,7 @@ git commit -m "feat: replace plaintext edit token storage"
 - Preserves controller and frontend contracts; controllers continue passing the exact non-empty header string into the service.
 - Preserves `publicArticleSelect`, which explicitly selects only public fields.
 
-- [ ] **Step 1: Replace direct crypto import with the focused helpers**
+- [x] **Step 1: Replace direct crypto import with the focused helpers**
 
 In `apps/backend/src/services/article-service.ts`, remove:
 
@@ -486,7 +486,7 @@ Add beside local imports:
 import { generateEditToken, hashEditToken } from "./edit-token.js";
 ```
 
-- [ ] **Step 2: Store only the digest at creation**
+- [x] **Step 2: Store only the digest at creation**
 
 At the start of `createArticle`, replace raw-token generation with one raw token and one digest computed before the slug retry loop:
 
@@ -509,7 +509,7 @@ editTokenHash,
 
 Keep returning `{ article, editToken }`. Both values must be created before the retry loop so a slug collision cannot rotate the credential that is ultimately returned.
 
-- [ ] **Step 3: Hash the PATCH credential before lookup**
+- [x] **Step 3: Hash the PATCH credential before lookup**
 
 In `updateArticle`, change only the Prisma filter:
 
@@ -522,7 +522,7 @@ where: {
 
 Do not change missing-header validation, `updateMany`, the `null` result contract, or the public follow-up select.
 
-- [ ] **Step 4: Hash the DELETE credential before lookup**
+- [x] **Step 4: Hash the DELETE credential before lookup**
 
 In `deleteArticle`, change only the Prisma filter:
 
@@ -535,7 +535,7 @@ where: {
 
 Keep returning `result.count > 0` so controllers preserve the existing `204`/`403` behavior.
 
-- [ ] **Step 5: Run the crypto and Phase 4 integration tests and verify GREEN**
+- [x] **Step 5: Run the crypto and Phase 4 integration tests and verify GREEN**
 
 Run:
 
@@ -548,7 +548,7 @@ pnpm --filter @paper-app/backend exec tsx --test \
 
 Expected: all selected tests PASS, including valid raw-token update/delete, stored-digest rejection, required hash storage, and response non-disclosure.
 
-- [ ] **Step 6: Run focused Phase 3 regression coverage**
+- [x] **Step 6: Run focused Phase 3 regression coverage**
 
 Run:
 
@@ -560,7 +560,7 @@ pnpm --filter @paper-app/backend exec tsx --test \
 
 Expected: sequential/concurrent slug creation and unrelated database-error handling PASS. This catches accidental regeneration of tokens inside the retry loop or broad Prisma error handling changes.
 
-- [ ] **Step 7: Scan production and generated code for plaintext persistence**
+- [x] **Step 7: Scan production and generated code for plaintext persistence**
 
 Run:
 
@@ -570,7 +570,7 @@ rg -n '\beditToken\b' apps/backend/src apps/backend/prisma -g '!**/*.test.ts'
 
 Expected matches are limited to the one-time raw-token local variable/return value, service parameters representing the incoming header, and controller header handling. There must be no Prisma field, migration column, generated model property, public select key, or log statement named `editToken`.
 
-- [ ] **Step 8: Commit the runtime implementation**
+- [x] **Step 8: Commit the runtime implementation**
 
 ```bash
 git add apps/backend/src/services/article-service.ts
@@ -591,7 +591,7 @@ git commit -m "feat: hash edit tokens before persistence"
 - Documents the existing HTTP contract plus the new at-rest boundary.
 - Does not mark the combined root README item complete because its recovery-UX half belongs to Phase 5.
 
-- [ ] **Step 1: Replace the editing credential paragraph**
+- [x] **Step 1: Replace the editing credential paragraph**
 
 Replace the current two sentences under `## Editing an article` with:
 
@@ -610,7 +610,7 @@ development articles when edit access is needed.
 
 Do not document recovery UI, Copy/Download actions, automatic storage failure behavior, or any other Phase 5 work.
 
-- [ ] **Step 2: Format only the changed Phase 4 files**
+- [x] **Step 2: Format only the changed Phase 4 files**
 
 Run:
 
@@ -626,13 +626,13 @@ pnpm exec prettier --write \
 
 Review the diff after formatting. Do not format or modify unrelated files.
 
-- [ ] **Step 3: Re-run only Phase 4 focused tests after formatting**
+- [x] **Step 3: Re-run only Phase 4 focused tests after formatting**
 
 Run the two Task 4 Step 5 commands.
 
 Expected: all selected unit and integration tests PASS.
 
-- [ ] **Step 4: Commit documentation and formatting-only adjustments**
+- [x] **Step 4: Commit documentation and formatting-only adjustments**
 
 ```bash
 git add \
@@ -659,7 +659,7 @@ git commit -m "docs: explain hashed edit token lifecycle"
 - Produces one independent whole-change review after implementation is otherwise complete.
 - Produces one final evidence set for the repository Definition of Done.
 
-- [ ] **Step 1: Confirm the review scope is clean and limited**
+- [x] **Step 1: Confirm the review scope is clean and limited**
 
 Run:
 
@@ -671,7 +671,7 @@ git diff --check c1c99bb..HEAD
 
 Expected: no unrelated files, no whitespace errors, and only Phase 4 plan/test/schema/migration/generated-client/service/documentation changes.
 
-- [ ] **Step 2: Request exactly one independent final review**
+- [x] **Step 2: Request exactly one independent final review**
 
 Dispatch one review subagent only now, after all implementation tasks are complete. Give it `docs/design/quality-hardening.md`, this plan, and the diff from `c1c99bb`. Ask it to inspect:
 
@@ -685,11 +685,11 @@ Dispatch one review subagent only now, after all implementation tasks are comple
 
 Do not dispatch implementation subagents or a second reviewer.
 
-- [ ] **Step 3: Resolve actionable review findings in the primary session**
+- [x] **Step 3: Resolve actionable review findings in the primary session**
 
 For each reported issue, reproduce or verify it first, add or adjust a focused failing test when behavior changes, implement the smallest Phase 4 fix, and rerun only the affected focused tests. Record the review outcome and any fixes in a short `## Implementation Record` section at the end of this plan. If the reviewer reports no actionable findings, record that fact without making code changes.
 
-- [ ] **Step 4: Run the one full acceptance gate**
+- [x] **Step 4: Run the one full acceptance gate**
 
 Use `superpowers:verification-before-completion`, then run these commands once as the final gate, in this order:
 
@@ -713,7 +713,7 @@ Expected:
 
 If any command fails, diagnose and fix it in the primary session, rerun the smallest failing command while iterating, and then rerun the entire six-command gate once from the beginning so the final evidence is one clean contiguous acceptance run.
 
-- [ ] **Step 5: Record final evidence without push or merge**
+- [x] **Step 5: Record final evidence without push or merge**
 
 Append the exact review result, migration smoke-test result, acceptance commands, task/test counts, and final commit hash under `## Implementation Record` in this plan. Commit that record locally if the environment permits; do not push, merge, or start Phase 5.
 
@@ -726,3 +726,13 @@ Append the exact review result, migration smoke-test result, acceptance commands
 - **Type consistency:** Both crypto helpers return `string`; the article-service public signatures stay unchanged; the Prisma field is consistently `editTokenHash`; no shared frontend type gains a persistence-only field.
 - **Review focus coverage:** Token length and hashing semantics are pinned in Task 1; database shape, stored value, response keys, and digest-as-header failure are pinned in Task 2; populated legacy rows are exercised in Task 3; slug retry regressions are exercised in Task 4.
 - **Scope:** The plan changes backend persistence, backend tests, generated Prisma code, and backend documentation only. It explicitly leaves recovery UX, client storage behavior, root milestone completion, uploads, deployment, push, and merge outside Phase 4.
+
+## Implementation Record
+
+- **Independent review:** One read-only whole-change reviewer inspected `c1c99bb..fb10d63`. It found no runtime, schema, or migration defect; it reported two Important test gaps and one Minor response-shape test gap. The response-shape gap was re-graded to Important because the Review Focus explicitly requires exact public response keys. All three entered the single fix pass; there was no second reviewer.
+- **Review fixes:** Commit `0389ecf` adds an uppercase/non-ASCII SHA-256 vector, proves case-sensitive exact UTF-8 hashing, rejects the stored digest for DELETE while preserving the article for raw-token deletion, and pins exact GET/PATCH public keys. Deliberate lowercase-plus-ASCII, direct-digest DELETE, and credential-projection mutations all produced RED before the correct implementation returned to GREEN.
+- **Migration smoke test:** A populated throwaway PostgreSQL 18 database contained one plaintext legacy token and one null token. The migration preserved both rows, assigned distinct 64-character lowercase hexadecimal placeholders, left only non-nullable `editTokenHash`, and removed the disposable database afterward.
+- **Acceptance-tested implementation head:** `0389ecf`.
+- **Acceptance gate:** `pnpm format:check` passed 3/3 workspace tasks; `pnpm lint` passed 1/1 task; `pnpm check-types` passed 4/4 non-zero tasks; frontend tests passed 82/82; backend tests passed 323/323 with verified cleanup of 39 articles and 1 upload; `pnpm build` passed 3/3 workspace tasks.
+- **Accepted warning:** The frontend production build reports one non-blocking 802.72 kB minified chunk warning, already deferred by the design for later route/editor code splitting.
+- **Scope confirmation:** Phase 5 was not started. No push, merge, or default-branch mutation was performed.
