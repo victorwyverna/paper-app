@@ -94,10 +94,16 @@ describe('ArticleCreatePage', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ key: 'uploaded-image.png' }), {
-          status: 201,
-          headers: { 'Content-Type': 'application/json' },
-        })
+        new Response(
+          JSON.stringify({
+            key: '550e8400-e29b-41d4-a716-446655440000.png',
+            url: 'https://paper.test/uploads/550e8400-e29b-41d4-a716-446655440000.png',
+          }),
+          {
+            status: 201,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
       )
       .mockResolvedValueOnce(createdArticleResponse());
     vi.stubGlobal('fetch', fetchMock);
@@ -118,7 +124,7 @@ describe('ArticleCreatePage', () => {
       name: 'paper boat.png',
     })) as HTMLImageElement;
     expect(image.getAttribute('src')).toBe(
-      'http://localhost:3000/uploads/uploaded-image.png'
+      'https://paper.test/uploads/550e8400-e29b-41d4-a716-446655440000.png'
     );
     fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
 
@@ -139,7 +145,7 @@ describe('ArticleCreatePage', () => {
           {
             type: 'image',
             attrs: {
-              src: 'http://localhost:3000/uploads/uploaded-image.png',
+              src: 'https://paper.test/uploads/550e8400-e29b-41d4-a716-446655440000.png',
               alt: 'paper boat.png',
               title: null,
               width: null,

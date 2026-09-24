@@ -2,13 +2,70 @@ import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
 
 import { createApp } from './app.js';
 import { prisma } from './db/prisma.js';
-import { ensureBucket } from './storage/s3.js';
+import { ensureBucket, getFile } from './storage/s3.js';
 
 const server = createApp();
 let baseUrl = '';
+type CreatedArticle = { slug: string; editToken: string };
+const createdArticles: CreatedArticle[] = [];
+const uploadedKeys: string[] = [];
+
+async function postArticle(input: unknown): Promise<Response> {
+  const response = await fetch(`${baseUrl}/articles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  // Track unexpected successes as well so RED runs also clean up their data.
+  if (response.status === 201) {
+    const created = (await response.clone().json()) as {
+      article: { slug: string };
+      editToken: string;
+    };
+    createdArticles.push({
+      slug: created.article.slug,
+      editToken: created.editToken,
+    });
+  }
+  return response;
+}
+
+async function createTestArticle(content: unknown): Promise<CreatedArticle> {
+  const response = await postArticle({
+    title: `Boundary article ${randomUUID()}`,
+    content,
+  });
+  assert.equal(response.status, 201);
+  const created = (await response.json()) as {
+    article: { slug: string };
+    editToken: string;
+  };
+  return { slug: created.article.slug, editToken: created.editToken };
+}
+
+async function deleteCreatedArticles(): Promise<void> {
+  for (const { slug, editToken } of createdArticles) {
+    const existing = await fetch(`${baseUrl}/articles/${slug}`);
+    if (existing.status !== 404) {
+      assert.equal(existing.status, 200);
+      const response = await fetch(`${baseUrl}/articles/${slug}`, {
+        method: 'DELETE',
+        headers: { 'X-Edit-Token': editToken },
+      });
+      assert.equal(response.status, 204);
+    }
+  }
+  assert.equal(
+    await prisma.article.count({
+      where: { slug: { in: createdArticles.map(({ slug }) => slug) } },
+    }),
+    0
+  );
+}
 
 before(async () => {
   await ensureBucket();
@@ -27,18 +84,46 @@ before(async () => {
 });
 
 after(async () => {
-  await new Promise<void>((resolve, reject) => {
-    server.close((error) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-
-      resolve();
+  try {
+    await deleteCreatedArticles();
+    const s3 = new S3Client({
+      endpoint: process.env.S3_ENDPOINT!,
+      region: 'us-east-1',
+      forcePathStyle: true,
+      credentials: {
+        accessKeyId: process.env.S3_ACCESS_KEY!,
+        secretAccessKey: process.env.S3_SECRET_KEY!,
+      },
     });
-  });
+    try {
+      for (const key of uploadedKeys) {
+        await s3.send(
+          new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET!, Key: key })
+        );
+        assert.equal(await getFile(key), null);
+      }
+    } finally {
+      s3.destroy();
+    }
+    console.log(
+      `Cleanup verified: ${createdArticles.length} articles and ${uploadedKeys.length} uploads removed`
+    );
+  } finally {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
 
-  await prisma.$disconnect();
+          resolve();
+        });
+      });
+    } finally {
+      await prisma.$disconnect();
+    }
+  }
 });
 
 test('creates an article and returns it publicly by slug', async () => {
@@ -48,13 +133,7 @@ test('creates an article and returns it publicly by slug', async () => {
     content: [],
   };
 
-  const createResponse = await fetch(`${baseUrl}/articles`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ title, content }),
-  });
+  const createResponse = await postArticle({ title, content });
 
   assert.equal(createResponse.status, 201);
 
@@ -129,7 +208,7 @@ test('returns 404 for an unknown article slug', async () => {
   assert.equal(body.message, 'Article not found');
 });
 
-test('returns 413 when the request body is too large', async () => {
+test('returns 413 before title and document validation when the request body is too large', async () => {
   const response = await fetch(`${baseUrl}/articles`, {
     method: 'POST',
     headers: {
@@ -138,7 +217,7 @@ test('returns 413 when the request body is too large', async () => {
     body: JSON.stringify({
       title: 'a'.repeat(1024 * 1024),
       content: {
-        type: 'doc',
+        type: 'invalid',
         content: [],
       },
     }),
@@ -178,18 +257,9 @@ test('returns 400 when article content is not a TipTap document', async () => {
 });
 
 test('updates an article with a valid edit token', async () => {
-  const createResponse = await fetch(`${baseUrl}/articles`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      title: `Article to update ${randomUUID()}`,
-      content: {
-        type: 'doc',
-        content: [],
-      },
-    }),
+  const createResponse = await postArticle({
+    title: `Article to update ${randomUUID()}`,
+    content: { type: 'doc', content: [] },
   });
 
   const created = (await createResponse.json()) as {
@@ -257,18 +327,9 @@ test('returns 401 when updating without an edit token', async () => {
 });
 
 test('returns 403 when updating with an invalid edit token', async () => {
-  const createResponse = await fetch(`${baseUrl}/articles`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      title: `Protected article ${randomUUID()}`,
-      content: {
-        type: 'doc',
-        content: [],
-      },
-    }),
+  const createResponse = await postArticle({
+    title: `Protected article ${randomUUID()}`,
+    content: { type: 'doc', content: [] },
   });
 
   const created = (await createResponse.json()) as {
@@ -298,18 +359,9 @@ test('returns 403 when updating with an invalid edit token', async () => {
 });
 
 test('deletes an article with a valid edit token', async () => {
-  const createResponse = await fetch(`${baseUrl}/articles`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      title: `Article to delete ${randomUUID()}`,
-      content: {
-        type: 'doc',
-        content: [],
-      },
-    }),
+  const createResponse = await postArticle({
+    title: `Article to delete ${randomUUID()}`,
+    content: { type: 'doc', content: [] },
   });
 
   const created = (await createResponse.json()) as {
@@ -353,18 +405,9 @@ test('returns 401 when deleting without an edit token', async () => {
 });
 
 test('returns 403 when deleting with an invalid edit token', async () => {
-  const createResponse = await fetch(`${baseUrl}/articles`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      title: `Protected article ${randomUUID()}`,
-      content: {
-        type: 'doc',
-        content: [],
-      },
-    }),
+  const createResponse = await postArticle({
+    title: `Protected article ${randomUUID()}`,
+    content: { type: 'doc', content: [] },
   });
 
   const created = (await createResponse.json()) as {
@@ -404,9 +447,15 @@ test('uploads and returns an image', async () => {
 
   const uploaded = (await uploadResponse.json()) as {
     key: string;
+    url: string;
   };
+  uploadedKeys.push(uploaded.key);
 
   assert.match(uploaded.key, /^[a-f0-9-]+\.png$/);
+  assert.equal(
+    uploaded.url,
+    `${process.env.PUBLIC_API_URL}/uploads/${uploaded.key}`
+  );
 
   const getResponse = await fetch(`${baseUrl}/uploads/${uploaded.key}`);
 
@@ -456,3 +505,168 @@ test('rejects an image larger than 5 MiB', async () => {
 
   assert.equal(body.message, 'Image is too large');
 });
+
+const doc = (...content: unknown[]) => ({ type: 'doc', content });
+const paragraph = { type: 'paragraph' };
+const text = { type: 'text', text: 'Original content' };
+const inline = (node: unknown) => doc({ type: 'paragraph', content: [node] });
+
+// Same root-inclusive builders as the schema tests, exercised through HTTP here.
+function documentAtDepth(depth: number, leaf: unknown = paragraph): unknown {
+  let node = leaf;
+  for (let currentDepth = 2; currentDepth < depth; currentDepth += 1) {
+    node = { type: 'blockquote', content: [node] };
+  }
+  return doc(node);
+}
+
+function documentWithNodes(count: number): unknown {
+  return doc(
+    ...Array.from({ length: count - 1 }, () => ({ type: 'paragraph' }))
+  );
+}
+
+async function rejectsCreate(input: {
+  title: string;
+  content: unknown;
+}): Promise<void> {
+  const response = await postArticle(input);
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).message, 'Invalid article data');
+  assert.equal(
+    await prisma.article.count({ where: { title: input.title } }),
+    0
+  );
+}
+
+async function rejectsUpdate(input: unknown): Promise<void> {
+  const created = await createTestArticle(inline(text));
+  const beforeResponse = await fetch(`${baseUrl}/articles/${created.slug}`);
+  assert.equal(beforeResponse.status, 200);
+  const original = await beforeResponse.json();
+  const response = await fetch(`${baseUrl}/articles/${created.slug}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Edit-Token': created.editToken,
+    },
+    body: JSON.stringify(input),
+  });
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).message, 'Invalid article data');
+  const afterResponse = await fetch(`${baseUrl}/articles/${created.slug}`);
+  assert.equal(afterResponse.status, 200);
+  assert.deepEqual(await afterResponse.json(), original);
+}
+
+const malformedImageSources = [
+  'https://attacker.test/uploads/550e8400-e29b-41d4-a716-446655440000.png',
+  'http://localhost:3000/uploads/nested/550e8400-e29b-41d4-a716-446655440000.png',
+  'http://localhost:3000/uploads/%2e%2e%2fsecret.png',
+  'http://localhost:3000/uploads/550e8400-e29b-41d4-a716-446655440000.png?download=1',
+  'http://localhost:3000/uploads/550e8400-e29b-41d4-a716-446655440000.png#fragment',
+];
+
+for (const src of malformedImageSources) {
+  test(`POST rejects malformed image source ${src}`, async () => {
+    await rejectsCreate({
+      title: `Invalid image ${randomUUID()}`,
+      content: doc({ type: 'image', attrs: { src } }),
+    });
+  });
+}
+
+for (const src of malformedImageSources) {
+  test(`PATCH rejects malformed image source ${src} without changing the article`, async () => {
+    await rejectsUpdate({ content: doc({ type: 'image', attrs: { src } }) });
+  });
+}
+
+const invalidStructures: [string, unknown][] = [
+  ['unknown document property', { ...doc(), extra: true }],
+  ['unknown nested node property', inline({ ...text, extra: true })],
+  [
+    'unknown mark property',
+    inline({ ...text, marks: [{ type: 'bold', extra: true }] }),
+  ],
+  [
+    'unknown node attribute',
+    doc({ type: 'heading', attrs: { level: 2, extra: true } }),
+  ],
+  [
+    'unknown mark attribute',
+    inline({
+      ...text,
+      marks: [
+        { type: 'link', attrs: { href: 'https://example.com', extra: true } },
+      ],
+    }),
+  ],
+  ['block under paragraph', doc({ type: 'paragraph', content: [paragraph] })],
+  ['inline under doc', doc(text)],
+  ['list without listItem', doc({ type: 'bulletList', content: [paragraph] })],
+  [
+    'marked code-block text',
+    doc({
+      type: 'codeBlock',
+      content: [{ ...text, marks: [{ type: 'bold' }] }],
+    }),
+  ],
+  ['leaf with children', doc({ type: 'horizontalRule', content: [] })],
+];
+
+test('POST rejects an unknown top-level article property without persisting it', async () => {
+  const input = {
+    title: `Unknown property ${randomUUID()}`,
+    content: doc(),
+    extra: true,
+  };
+  await rejectsCreate(input);
+});
+
+test('PATCH rejects an unknown top-level article property without changing the article', async () => {
+  await rejectsUpdate({ content: doc(), extra: true });
+});
+
+for (const [name, content] of invalidStructures) {
+  test(`POST rejects ${name} without persisting it`, async () => {
+    await rejectsCreate({
+      title: `Invalid structure ${randomUUID()}`,
+      content,
+    });
+  });
+  test(`PATCH rejects ${name} without changing the article`, async () => {
+    await rejectsUpdate({ content });
+  });
+}
+
+for (const [name, content] of [
+  ['depth 20', documentAtDepth(20)],
+  ['10,000 nodes', documentWithNodes(10_000)],
+  [
+    'canonical image URL',
+    doc({
+      type: 'image',
+      attrs: {
+        src: 'http://localhost:3000/uploads/550e8400-e29b-41d4-a716-446655440000.png',
+      },
+    }),
+  ],
+] as const) {
+  test(`POST persists ${name} unchanged`, async () => {
+    const { slug } = await createTestArticle(content);
+    const response = await fetch(`${baseUrl}/articles/${slug}`);
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).content, content);
+  });
+}
+
+for (const [name, content] of [
+  ['depth 21', documentAtDepth(21)],
+  ['10,001 nodes', documentWithNodes(10_001)],
+  ['malformed depth 21', documentAtDepth(21, { ...paragraph, extra: true })],
+] as const) {
+  test(`POST rejects ${name} with a controlled 400`, async () => {
+    await rejectsCreate({ title: `Over boundary ${randomUUID()}`, content });
+  });
+}
