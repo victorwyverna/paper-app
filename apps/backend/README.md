@@ -91,14 +91,14 @@ The OpenAPI 3.1 contract is available from the running backend at
 [`/docs`](http://localhost:3000/docs). Import the former URL (or the generated file below)
 directly into Postman.
 
-| Method | Path | Description |
-| --- | --- | --- |
-| `POST` | `/articles` | Create an article from `title` and TipTap JSON `content`. |
-| `GET` | `/articles/:slug` | Get a public article by its slug. |
-| `PATCH` | `/articles/:slug` | Update an article with `X-Edit-Token`. |
-| `DELETE` | `/articles/:slug` | Delete an article with `X-Edit-Token`. |
-| `POST` | `/uploads` | Upload a JPEG, PNG, WebP, or GIF image up to 5 MiB. |
-| `GET` | `/uploads/:key` | Get an uploaded image. |
+| Method   | Path              | Description                                               |
+| -------- | ----------------- | --------------------------------------------------------- |
+| `POST`   | `/articles`       | Create an article from `title` and TipTap JSON `content`. |
+| `GET`    | `/articles/:slug` | Get a public article by its slug.                         |
+| `PATCH`  | `/articles/:slug` | Update an article with `X-Edit-Token`.                    |
+| `DELETE` | `/articles/:slug` | Delete an article with `X-Edit-Token`.                    |
+| `POST`   | `/uploads`        | Upload a JPEG, PNG, WebP, or GIF image up to 5 MiB.       |
+| `GET`    | `/uploads/:key`   | Get an uploaded image.                                    |
 
 Create and update titles have a 200-character maximum. Article content must be a
 strict TipTap document. Allowed nodes are `doc`, `paragraph`, `text`, `heading`
@@ -122,9 +122,16 @@ with a query or fragment is rejected with HTTP `400` as article content.
 
 ## Editing an article
 
-`POST /articles` returns an `editToken` once. Store it on the client: it is required in the `X-Edit-Token` header for `PATCH` and `DELETE` requests.
+`POST /articles` returns a cryptographically random 32-byte `editToken` once as
+64 lowercase hexadecimal characters. Store that raw value on the client and
+send it unchanged in the `X-Edit-Token` header for `PATCH` and `DELETE`
+requests.
 
-Public article responses never include this token.
+The database stores only the lowercase SHA-256 digest of the token. Public
+create, read, and update article objects never contain the raw token or its
+digest. The Phase 4 development migration intentionally invalidates edit
+access for articles created before hashed-token storage; recreate those
+development articles when edit access is needed.
 
 ## Postman collection
 

@@ -6,6 +6,7 @@ import { DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
 
 import { createApp } from './app.js';
 import { prisma } from './db/prisma.js';
+import { hashEditToken } from './services/edit-token.js';
 import { ensureBucket, getFile } from './storage/s3.js';
 import { cleanupResources } from './test-utils/cleanup.js';
 
@@ -156,13 +157,31 @@ test('creates an article and returns it publicly by slug', async () => {
 
   const created = (await createResponse.json()) as {
     article: {
+      id: number;
       slug: string;
       title: string;
       content: unknown;
+      createdAt: string;
+      updatedAt: string;
+      editToken?: unknown;
+      editTokenHash?: unknown;
     };
     editToken: string;
+    editTokenHash?: unknown;
   };
 
+  assert.deepEqual(Object.keys(created).toSorted(), ['article', 'editToken']);
+  assert.deepEqual(Object.keys(created.article).toSorted(), [
+    'content',
+    'createdAt',
+    'id',
+    'slug',
+    'title',
+    'updatedAt',
+  ]);
+  assert.equal(created.editTokenHash, undefined);
+  assert.equal(created.article.editToken, undefined);
+  assert.equal(created.article.editTokenHash, undefined);
   assert.equal(created.article.title, title);
   assert.deepEqual(created.article.content, content);
   assert.ok(created.article.slug);
@@ -175,16 +194,62 @@ test('creates an article and returns it publicly by slug', async () => {
   assert.equal(getResponse.status, 200);
 
   const article = (await getResponse.json()) as {
+    id: number;
     slug: string;
     title: string;
     content: unknown;
+    createdAt: string;
+    updatedAt: string;
     editToken?: unknown;
+    editTokenHash?: unknown;
   };
 
+  assert.deepEqual(Object.keys(article).toSorted(), [
+    'content',
+    'createdAt',
+    'id',
+    'slug',
+    'title',
+    'updatedAt',
+  ]);
   assert.equal(article.slug, created.article.slug);
   assert.equal(article.title, title);
   assert.deepEqual(article.content, content);
   assert.equal(article.editToken, undefined);
+  assert.equal(article.editTokenHash, undefined);
+});
+
+test('stores only a required lowercase SHA-256 edit-token digest', async () => {
+  const response = await postArticle({
+    title: `Hashed edit token ${randomUUID()}`,
+    content: { type: 'doc', content: [] },
+  });
+  assert.equal(response.status, 201);
+
+  const created = (await response.json()) as {
+    article: { slug: string };
+    editToken: string;
+  };
+  const rows = await prisma.$queryRaw<
+    Array<{ editTokenHash: string }>
+  >`SELECT "editTokenHash" FROM "Article" WHERE "slug" = ${created.article.slug}`;
+
+  assert.deepEqual(rows, [{ editTokenHash: hashEditToken(created.editToken) }]);
+  assert.match(rows[0]!.editTokenHash, /^[a-f0-9]{64}$/);
+  assert.notEqual(rows[0]!.editTokenHash, created.editToken);
+
+  const credentialColumns = await prisma.$queryRaw<
+    Array<{ column_name: string; is_nullable: string }>
+  >`SELECT column_name, is_nullable
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'Article'
+        AND column_name IN ('editToken', 'editTokenHash')
+      ORDER BY column_name`;
+
+  assert.deepEqual(credentialColumns, [
+    { column_name: 'editTokenHash', is_nullable: 'NO' },
+  ]);
 });
 
 test('increments slug suffixes for repeated article titles', async () => {
@@ -392,12 +457,28 @@ test('updates an article with a valid edit token', async () => {
   assert.equal(updateResponse.status, 200);
 
   const updatedArticle = (await updateResponse.json()) as {
+    id: number;
     slug: string;
     title: string;
+    content: unknown;
+    createdAt: string;
+    updatedAt: string;
+    editToken?: unknown;
+    editTokenHash?: unknown;
   };
 
+  assert.deepEqual(Object.keys(updatedArticle).toSorted(), [
+    'content',
+    'createdAt',
+    'id',
+    'slug',
+    'title',
+    'updatedAt',
+  ]);
   assert.equal(updatedArticle.slug, created.article.slug);
   assert.equal(updatedArticle.title, updatedTitle);
+  assert.equal(updatedArticle.editToken, undefined);
+  assert.equal(updatedArticle.editTokenHash, undefined);
 
   const getResponse = await fetch(
     `${baseUrl}/articles/${created.article.slug}`
@@ -408,6 +489,29 @@ test('updates an article with a valid edit token', async () => {
   };
 
   assert.equal(publicArticle.title, updatedTitle);
+});
+
+test('hashes X-Edit-Token before the update lookup', async () => {
+  const createResponse = await postArticle({
+    title: `Hash lookup ${randomUUID()}`,
+    content: { type: 'doc', content: [] },
+  });
+  const created = (await createResponse.json()) as {
+    article: { slug: string };
+    editToken: string;
+  };
+
+  const response = await fetch(`${baseUrl}/articles/${created.article.slug}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Edit-Token': hashEditToken(created.editToken),
+    },
+    body: JSON.stringify({ title: 'Digest must not authorize' }),
+  });
+
+  assert.equal(response.status, 403);
+  assert.deepEqual(await response.json(), { message: 'Invalid edit token' });
 });
 
 test('returns 401 when updating without an edit token', async () => {
@@ -492,6 +596,48 @@ test('deletes an article with a valid edit token', async () => {
   );
 
   assert.equal(getResponse.status, 404);
+});
+
+test('hashes X-Edit-Token before the delete lookup', async () => {
+  const createResponse = await postArticle({
+    title: `Delete hash lookup ${randomUUID()}`,
+    content: { type: 'doc', content: [] },
+  });
+  const created = (await createResponse.json()) as {
+    article: { slug: string };
+    editToken: string;
+  };
+
+  const digestResponse = await fetch(
+    `${baseUrl}/articles/${created.article.slug}`,
+    {
+      method: 'DELETE',
+      headers: {
+        'X-Edit-Token': hashEditToken(created.editToken),
+      },
+    }
+  );
+
+  assert.equal(digestResponse.status, 403);
+  assert.deepEqual(await digestResponse.json(), {
+    message: 'Invalid edit token',
+  });
+
+  const survivingResponse = await fetch(
+    `${baseUrl}/articles/${created.article.slug}`
+  );
+  assert.equal(survivingResponse.status, 200);
+
+  const rawTokenResponse = await fetch(
+    `${baseUrl}/articles/${created.article.slug}`,
+    {
+      method: 'DELETE',
+      headers: {
+        'X-Edit-Token': created.editToken,
+      },
+    }
+  );
+  assert.equal(rawTokenResponse.status, 204);
 });
 
 test('returns 401 when deleting without an edit token', async () => {
