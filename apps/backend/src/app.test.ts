@@ -223,9 +223,7 @@ test('stores only a required lowercase SHA-256 edit-token digest', async () => {
     Array<{ editTokenHash: string }>
   >`SELECT "editTokenHash" FROM "Article" WHERE "slug" = ${created.article.slug}`;
 
-  assert.deepEqual(rows, [
-    { editTokenHash: hashEditToken(created.editToken) },
-  ]);
+  assert.deepEqual(rows, [{ editTokenHash: hashEditToken(created.editToken) }]);
   assert.match(rows[0]!.editTokenHash, /^[a-f0-9]{64}$/);
   assert.notEqual(rows[0]!.editTokenHash, created.editToken);
 
