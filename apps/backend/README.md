@@ -62,9 +62,12 @@ Requirements: Node.js 24 or later, pnpm 11, and Docker with Docker Compose.
    S3_ACCESS_KEY="paper-minio"
    S3_SECRET_KEY="paper-pwd"
    S3_BUCKET="paper"
+   PUBLIC_API_URL=http://localhost:3000
    ```
 
    Optionally, set `PORT` (defaults to `3000`) and `FRONTEND_ORIGIN` (defaults to `http://localhost:5173`).
+   `PUBLIC_API_URL` must be the externally visible Paper API origin used in frontend upload URLs.
+   It must be an HTTP(S) origin with no path, query, fragment, or credentials.
 
 3. Apply database migrations and start the backend:
 
@@ -90,6 +93,26 @@ directly into Postman.
 | `DELETE` | `/articles/:slug` | Delete an article with `X-Edit-Token`. |
 | `POST` | `/uploads` | Upload a JPEG, PNG, WebP, or GIF image up to 5 MiB. |
 | `GET` | `/uploads/:key` | Get an uploaded image. |
+
+Create and update titles have a 200-character maximum. Article content must be a
+strict TipTap document. Allowed nodes are `doc`, `paragraph`, `text`, `heading`
+(levels 2 and 3), `blockquote`, `bulletList`, `orderedList`, `listItem`,
+`codeBlock`, `horizontalRule`, `hardBreak`, and `image`. Allowed marks are
+`bold`, `italic`, `strike`, `underline`, `code`, and `link`. Links may use only
+`http:`, `https:`, or `mailto:` URLs. The validator checks parent-child
+relationships and known attributes; unknown nodes, marks, attributes, and
+properties are rejected with HTTP `400` without changing the submitted content.
+The maximum document depth is 20 and the maximum total node count is 10,000,
+both including the root. The JSON request body retains its outer 1 MiB limit
+and receives HTTP `413` when exceeded.
+
+`POST /uploads` returns a `key` and a canonical public `url` under
+`PUBLIC_API_URL`, for example
+`http://localhost:3000/uploads/550e8400-e29b-41d4-a716-446655440000.png`.
+Article image nodes may reference only generated
+`/uploads/<uuid>.<extension>` URLs under that configured origin. Supported
+extensions are `jpg`, `png`, `webp`, and `gif`; a different origin or a URL
+with a query or fragment is rejected with HTTP `400` as article content.
 
 ## Editing an article
 

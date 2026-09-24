@@ -2,6 +2,9 @@
  * The API contract. Keep this in the backend so `/openapi.json`, Swagger UI,
  * and the generated Postman collection always describe the running API.
  */
+const articleContentDescription =
+  'Strict TipTap document, maximum depth 20 and maximum 10,000 nodes (both including the root). Invalid structures receive HTTP 400; content is rejected rather than changed.';
+
 export const openApiDocument = {
   openapi: '3.1.0',
   info: {
@@ -20,6 +23,8 @@ export const openApiDocument = {
       post: {
         tags: ['Articles'],
         summary: 'Create an article',
+        description:
+          'The title is limited to 200 characters. Invalid article content receives HTTP 400. The JSON request body has a 1 MiB limit.',
         requestBody: {
           required: true,
           content: {
@@ -62,6 +67,8 @@ export const openApiDocument = {
       patch: {
         tags: ['Articles'],
         summary: 'Update an article',
+        description:
+          'The title is limited to 200 characters. Invalid article content receives HTTP 400. The JSON request body has a 1 MiB limit.',
         parameters: [{ $ref: '#/components/parameters/EditToken' }],
         requestBody: {
           required: true,
@@ -173,7 +180,8 @@ export const openApiDocument = {
     },
     responses: {
       InvalidArticle: {
-        description: 'Invalid JSON or article data',
+        description:
+          'Invalid JSON or article data, including TipTap nodes, marks, attributes, properties, relationships, or image URLs outside the strict allowlist. The document is rejected without modification.',
         content: {
           'application/json': {
             schema: { $ref: '#/components/schemas/Error' },
@@ -248,6 +256,8 @@ export const openApiDocument = {
     schemas: {
       TiptapDocument: {
         type: 'object',
+        description:
+          'Allowed nodes: doc, paragraph, text, heading (levels 2 and 3), blockquote, bulletList, orderedList, listItem, codeBlock, horizontalRule, hardBreak, and image. Allowed marks: bold, italic, strike, underline, code, and link. Links use http:, https:, or mailto:. Images use only canonical URLs from the configured PUBLIC_API_URL origin: /uploads/<uuid>.<jpg|png|webp|gif>. Node relationships and known attributes are validated strictly; unknown content receives HTTP 400. The document has maximum depth 20 and maximum 10,000 nodes, including the root.',
         required: ['type', 'content'],
         properties: {
           type: { type: 'string', const: 'doc' },
@@ -276,7 +286,10 @@ export const openApiDocument = {
             maxLength: 200,
             example: 'My first article',
           },
-          content: { $ref: '#/components/schemas/TiptapDocument' },
+          content: {
+            $ref: '#/components/schemas/TiptapDocument',
+            description: articleContentDescription,
+          },
         },
       },
       UpdateArticleInput: {
@@ -284,7 +297,10 @@ export const openApiDocument = {
         minProperties: 1,
         properties: {
           title: { type: 'string', minLength: 1, maxLength: 200 },
-          content: { $ref: '#/components/schemas/TiptapDocument' },
+          content: {
+            $ref: '#/components/schemas/TiptapDocument',
+            description: articleContentDescription,
+          },
         },
       },
       Article: {
@@ -313,11 +329,19 @@ export const openApiDocument = {
       },
       UploadedImage: {
         type: 'object',
-        required: ['key'],
+        required: ['key', 'url'],
         properties: {
           key: {
             type: 'string',
             example: '550e8400-e29b-41d4-a716-446655440000.png',
+          },
+          url: {
+            type: 'string',
+            format: 'uri',
+            description:
+              'Canonical public image URL under PUBLIC_API_URL, returned for use as a TipTap image src.',
+            example:
+              'http://localhost:3000/uploads/550e8400-e29b-41d4-a716-446655440000.png',
           },
         },
       },

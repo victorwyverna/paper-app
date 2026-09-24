@@ -4,6 +4,7 @@ import {
   buildPublicUploadUrl,
   parsePublicApiUrl,
 } from '../config/public-api.js';
+import { openApiDocument } from '../openapi.js';
 import { createTiptapDocumentSchema } from './tiptap.js';
 
 const schema = createTiptapDocumentSchema({
@@ -550,5 +551,27 @@ test('upload URL builder preserves the configured origin and encodes the entire 
       parsePublicApiUrl('http://localhost:4000')
     ),
     'http://localhost:4000/uploads/folder%2Fa%20b%3F%23.png'
+  );
+});
+
+test('OpenAPI exposes the title limit and bounded article content on create and update', () => {
+  for (const input of [
+    openApiDocument.components.schemas.CreateArticleInput,
+    openApiDocument.components.schemas.UpdateArticleInput,
+  ]) {
+    assert.equal(input.properties.title.maxLength, 200);
+    const description = (input.properties.content as { description?: string })
+      .description;
+    assert.match(description ?? '', /maximum depth 20/);
+    assert.match(description ?? '', /maximum 10,000 nodes/);
+  }
+});
+
+test('OpenAPI upload response exposes the canonical image URL', () => {
+  const uploadedImage = openApiDocument.components.schemas.UploadedImage;
+  assert.ok((uploadedImage.required as readonly string[]).includes('url'));
+  assert.equal(
+    (uploadedImage.properties as { url?: { format?: string } }).url?.format,
+    'uri'
   );
 });
