@@ -28,6 +28,8 @@ jobs:
       S3_SECRET_KEY: paper-pwd
       S3_BUCKET: paper-ci
       PUBLIC_API_URL: http://localhost:3000
+      MINIO_ROOT_USER: paper-minio
+      MINIO_ROOT_PASSWORD: paper-pwd
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v4
@@ -37,18 +39,34 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      - uses: actions/setup-go@v6
+        with:
+          go-version: 1.24.2
+          cache: false
+
+      - name: Cache MinIO binary
+        id: cache-minio
+        uses: actions/cache@v5
+        with:
+          path: ${{ runner.temp }}/minio-bin
+          key: minio-${{ runner.os }}-${{ runner.arch }}-07c3a429bfed433e49018cb0f78a52145d4bedeb
+
+      - name: Build MinIO
+        if: steps.cache-minio.outputs.cache-hit != 'true'
+        env:
+          GOBIN: ${{ runner.temp }}/minio-bin
+        run: |
+          mkdir -p "$GOBIN"
+          go install github.com/minio/minio@07c3a429bfed433e49018cb0f78a52145d4bedeb
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Start MinIO
-        run: >-
-          docker run --detach --name paper-minio
-          --publish 9000:9000
-          --env MINIO_ROOT_USER=paper-minio
-          --env MINIO_ROOT_PASSWORD=paper-pwd
-          quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
-          server /data
+        run: |
+          mkdir -p "$RUNNER_TEMP/minio-data"
+          "$RUNNER_TEMP/minio-bin/minio" server "$RUNNER_TEMP/minio-data" \
+            >"$RUNNER_TEMP/minio.log" 2>&1 &
 
       - name: Wait for MinIO
         run: |
@@ -58,7 +76,7 @@ jobs:
             fi
             sleep 1
           done
-          docker logs paper-minio
+          cat "$RUNNER_TEMP/minio.log"
           exit 1
 
       - name: Apply database migrations
