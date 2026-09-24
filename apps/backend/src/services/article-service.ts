@@ -8,18 +8,53 @@ import type {
   UpdateArticleInput,
 } from '../schemas/article.js';
 
-async function createUniqueSlug(title: string): Promise<string> {
-  const baseSlug = slugify(title) || 'article';
+const articleSlugUniqueConstraint = 'Article_slug_key';
 
-  let slug = baseSlug;
-  let suffix = 2;
+type DriverConstraint = {
+  fields?: unknown;
+  index?: unknown;
+};
 
-  while (await prisma.article.findUnique({ where: { slug } })) {
-    slug = `${baseSlug}-${suffix}`;
-    suffix += 1;
+type UniqueErrorMeta = {
+  target?: unknown;
+  driverAdapterError?: {
+    cause?: {
+      constraint?: DriverConstraint;
+    };
+  };
+};
+
+function normalizedFields(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
   }
 
-  return slug;
+  return value
+    .filter((field): field is string => typeof field === 'string')
+    .map((field) => field.replace(/^"|"$/g, ''));
+}
+
+function isSlugUniqueConstraintViolation(error: unknown): boolean {
+  if (
+    !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+    error.code !== 'P2002'
+  ) {
+    return false;
+  }
+
+  const meta = error.meta as UniqueErrorMeta | undefined;
+  if (meta?.target === articleSlugUniqueConstraint) {
+    return true;
+  }
+  if (normalizedFields(meta?.target).includes('slug')) {
+    return true;
+  }
+
+  const constraint = meta?.driverAdapterError?.cause?.constraint;
+  return (
+    constraint?.index === articleSlugUniqueConstraint ||
+    normalizedFields(constraint?.fields).includes('slug')
+  );
 }
 
 const publicArticleSelect = {
@@ -33,21 +68,35 @@ const publicArticleSelect = {
 
 export async function createArticle(input: CreateArticleInput) {
   const editToken = randomBytes(32).toString('hex');
+  const baseSlug = slugify(input.title) || 'article';
+  let suffix = 1;
 
-  const article = await prisma.article.create({
-    data: {
-      slug: await createUniqueSlug(input.title),
-      editToken,
-      title: input.title,
-      content: input.content as Prisma.InputJsonValue,
-    },
-    select: publicArticleSelect,
-  });
+  for (;;) {
+    const slug = suffix === 1 ? baseSlug : `${baseSlug}-${suffix}`;
 
-  return {
-    article,
-    editToken,
-  };
+    try {
+      const article = await prisma.article.create({
+        data: {
+          slug,
+          editToken,
+          title: input.title,
+          content: input.content as Prisma.InputJsonValue,
+        },
+        select: publicArticleSelect,
+      });
+
+      return {
+        article,
+        editToken,
+      };
+    } catch (error) {
+      if (!isSlugUniqueConstraintViolation(error)) {
+        throw error;
+      }
+
+      suffix += 1;
+    }
+  }
 }
 
 export async function getArticleBySlug(slug: string) {
