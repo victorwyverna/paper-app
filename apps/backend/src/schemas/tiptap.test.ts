@@ -127,6 +127,11 @@ for (const href of [
   'http://example.com/a',
   'https://example.com/a?x=1#b',
   'mailto:hello@example.com',
+  'HTTPS://Example.com/Article',
+  'hTtP://example.com/a',
+  'MAILTO:Writer@example.com',
+  'https://example.com',
+  'https://example.com/a%20b?query=one%20two#part',
 ]) {
   test(`grammar preserves all six marks and link ${href}`, () => {
     const document = inline({
@@ -453,6 +458,15 @@ for (const href of [
   ' https://example.com',
   'https://example.com ',
   'https:example.com',
+  'https://exa\nmple.com',
+  'https://exa\tmple.com',
+  'https://example.com/\u0000path',
+  'https://example.com/\u007fpath',
+  'https:///example.com',
+  'https:////example.com',
+  'https://\\example.com',
+  'https://example.com\\path',
+  'mailto:writer@exam\nple.com',
   'https://',
   'ftp://example.com',
   '',

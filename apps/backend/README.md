@@ -73,10 +73,16 @@ Requirements: Node.js 24 or later, pnpm 11, and Docker with Docker Compose.
 
    ```bash
    pnpm --filter @paper-app/backend db:migrate
-   pnpm --filter @paper-app/backend dev
+   pnpm exec turbo run dev --filter=@paper-app/backend
    ```
 
 The API will be available at [http://localhost:3000](http://localhost:3000). On startup, the backend creates the configured S3 bucket if it does not yet exist. MinIO Console is available at [http://localhost:9001](http://localhost:9001).
+
+Use `pnpm dev` from the repository root to start both applications. Both this
+command and the filtered Turbo command above build `@paper-app/types` before
+starting the applications, including on a clean checkout. The direct package
+command `pnpm --filter @paper-app/backend dev` requires that shared build to
+already exist. Restart the Turbo dev command after editing the shared package.
 
 ## API
 

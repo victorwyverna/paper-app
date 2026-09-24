@@ -1,4 +1,4 @@
-const SUPPORTED_LINK = /^(https?:\/\/|mailto:)/i;
+const SUPPORTED_LINK = /^(https?:\/\/[^/\s?#\\]+|mailto:)/i;
 const URL_SCHEME = /^[a-z][a-z\d+.-]*:/i;
 
 export function sanitizeHref(value: unknown): string | null {
@@ -6,7 +6,12 @@ export function sanitizeHref(value: unknown): string | null {
     return null;
   }
 
-  if (!SUPPORTED_LINK.test(value)) {
+  // URL() repairs controls, backslashes and missing HTTP authority syntax.
+  if (
+    /\p{Cc}|\\/u.test(value) ||
+    /\s$/.test(value) ||
+    !SUPPORTED_LINK.test(value)
+  ) {
     return null;
   }
 

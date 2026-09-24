@@ -43,8 +43,9 @@ function allowedKeysFor(type: unknown): readonly string[] {
 function isLinkHref(value: unknown): boolean {
   if (
     typeof value !== 'string' ||
+    /\p{Cc}|\\/u.test(value) ||
     /\s$/.test(value) ||
-    !/^(?:https?:\/\/|mailto:)/.test(value)
+    !/^(?:https?:\/\/[^/\s?#\\]+|mailto:)/i.test(value)
   )
     return false;
   try {

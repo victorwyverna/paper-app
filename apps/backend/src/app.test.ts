@@ -7,6 +7,7 @@ import { DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { createApp } from './app.js';
 import { prisma } from './db/prisma.js';
 import { ensureBucket, getFile } from './storage/s3.js';
+import { cleanupResources } from './test-utils/cleanup.js';
 
 const server = createApp();
 let baseUrl = '';
@@ -47,24 +48,19 @@ async function createTestArticle(content: unknown): Promise<CreatedArticle> {
   return { slug: created.article.slug, editToken: created.editToken };
 }
 
-async function deleteCreatedArticles(): Promise<void> {
-  for (const { slug, editToken } of createdArticles) {
-    const existing = await fetch(`${baseUrl}/articles/${slug}`);
-    if (existing.status !== 404) {
-      assert.equal(existing.status, 200);
-      const response = await fetch(`${baseUrl}/articles/${slug}`, {
-        method: 'DELETE',
-        headers: { 'X-Edit-Token': editToken },
-      });
-      assert.equal(response.status, 204);
-    }
+async function deleteCreatedArticle({
+  slug,
+  editToken,
+}: CreatedArticle): Promise<void> {
+  const existing = await fetch(`${baseUrl}/articles/${slug}`);
+  if (existing.status !== 404) {
+    assert.equal(existing.status, 200);
+    const response = await fetch(`${baseUrl}/articles/${slug}`, {
+      method: 'DELETE',
+      headers: { 'X-Edit-Token': editToken },
+    });
+    assert.equal(response.status, 204);
   }
-  assert.equal(
-    await prisma.article.count({
-      where: { slug: { in: createdArticles.map(({ slug }) => slug) } },
-    }),
-    0
-  );
 }
 
 before(async () => {
@@ -85,7 +81,6 @@ before(async () => {
 
 after(async () => {
   try {
-    await deleteCreatedArticles();
     const s3 = new S3Client({
       endpoint: process.env.S3_ENDPOINT!,
       region: 'us-east-1',
@@ -96,12 +91,28 @@ after(async () => {
       },
     });
     try {
-      for (const key of uploadedKeys) {
-        await s3.send(
-          new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET!, Key: key })
-        );
-        assert.equal(await getFile(key), null);
-      }
+      await cleanupResources([
+        ...createdArticles.map(
+          (article) => () => deleteCreatedArticle(article)
+        ),
+        ...uploadedKeys.map((key) => async () => {
+          await s3.send(
+            new DeleteObjectCommand({
+              Bucket: process.env.S3_BUCKET!,
+              Key: key,
+            })
+          );
+          assert.equal(await getFile(key), null);
+        }),
+        async () => {
+          assert.equal(
+            await prisma.article.count({
+              where: { slug: { in: createdArticles.map(({ slug }) => slug) } },
+            }),
+            0
+          );
+        },
+      ]);
     } finally {
       s3.destroy();
     }

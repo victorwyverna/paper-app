@@ -11,6 +11,9 @@ describe('normalizeHrefInput', () => {
     'https://example.com/article',
     'http://example.com',
     'mailto:writer@example.com',
+    'HTTPS://Example.com/Article',
+    'hTtP://example.com/a',
+    'MAILTO:Writer@example.com',
   ])('keeps a supported absolute URL unchanged: %s', (href) => {
     expect(normalizeHrefInput(href)).toBe(href);
   });
@@ -35,8 +38,28 @@ describe('sanitizeHref', () => {
     'javascript:alert(1)',
     ' https://example.com',
     'https:example.com',
+    'https://exa\nmple.com',
+    'https://exa\tmple.com',
+    'https://example.com/\u0000path',
+    'https://example.com/\u007fpath',
+    'https:///example.com',
+    'https:////example.com',
+    'https://\\example.com',
+    'https://example.com\\path',
+    'https://example.com ',
+    'mailto:writer@exam\nple.com',
   ])('rejects a URL outside the article policy: %s', (href) => {
     expect(sanitizeHref(href)).toBeNull();
+  });
+
+  test.each([
+    'HTTPS://Example.com/Article',
+    'hTtP://example.com/a',
+    'MAILTO:Writer@example.com',
+    'https://example.com',
+    'https://example.com/a%20b?query=one%20two#part',
+  ])('preserves supported URL spelling: %s', (href) => {
+    expect(sanitizeHref(href)).toBe(href);
   });
 
   test.each([undefined, '', 'example.com', 'javascript:alert(1)'])(
