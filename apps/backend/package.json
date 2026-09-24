@@ -9,7 +9,7 @@
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
     "db:migrate": "prisma migrate deploy",
-    "test": "tsx --test src/**/*.test.ts",
+    "test": "tsx --test \"src/**/*.test.ts\"",
     "check-types": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.ts\" package.json",
     "format:check": "prettier --check \"src/**/*.ts\" package.json"
