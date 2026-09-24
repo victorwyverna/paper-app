@@ -62,17 +62,17 @@ No Prisma migration is planned because `slug String @unique` and its database in
 Import the same slug library used by production so assertions describe the library contract without duplicating transliteration rules:
 
 ```ts
-import slugify from '@sindresorhus/slugify';
+import slugify from "@sindresorhus/slugify";
 ```
 
 Add this helper beside `postArticle`:
 
 ```ts
 function expectedSlugsForTitle(title: string, count: number): string[] {
-  const baseSlug = slugify(title) || 'article';
+  const baseSlug = slugify(title) || "article";
 
   return Array.from({ length: count }, (_, index) =>
-    index === 0 ? baseSlug : `${baseSlug}-${index + 1}`
+    index === 0 ? baseSlug : `${baseSlug}-${index + 1}`,
   );
 }
 ```
@@ -82,9 +82,9 @@ function expectedSlugsForTitle(title: string, count: number): string[] {
 Add the following integration test after the existing create/get happy path. It pins the suffix starting point and increment independently of scheduler timing:
 
 ```ts
-test('increments slug suffixes for repeated article titles', async () => {
+test("increments slug suffixes for repeated article titles", async () => {
   const title = `Repeated slug ${randomUUID()}`;
-  const content = { type: 'doc', content: [] };
+  const content = { type: "doc", content: [] };
 
   const responses = [];
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -93,19 +93,19 @@ test('increments slug suffixes for repeated article titles', async () => {
 
   assert.deepEqual(
     responses.map(({ status }) => status),
-    [201, 201, 201]
+    [201, 201, 201],
   );
 
   const bodies = await Promise.all(
     responses.map(
       async (response) =>
-        (await response.json()) as { article: { slug: string } }
-    )
+        (await response.json()) as { article: { slug: string } },
+    ),
   );
 
   assert.deepEqual(
     bodies.map(({ article }) => article.slug),
-    expectedSlugsForTitle(title, 3)
+    expectedSlugsForTitle(title, 3),
   );
 });
 ```
@@ -115,32 +115,32 @@ test('increments slug suffixes for repeated article titles', async () => {
 Add a test that starts all POSTs before awaiting any individual response. Compare sorted sets because completion order is intentionally nondeterministic:
 
 ```ts
-test('creates distinct slugs for concurrent requests with the same title', async () => {
+test("creates distinct slugs for concurrent requests with the same title", async () => {
   const requestCount = 8;
   const title = `Concurrent slug ${randomUUID()}`;
-  const content = { type: 'doc', content: [] };
+  const content = { type: "doc", content: [] };
 
   const responses = await Promise.all(
-    Array.from({ length: requestCount }, () => postArticle({ title, content }))
+    Array.from({ length: requestCount }, () => postArticle({ title, content })),
   );
 
   assert.deepEqual(
     responses.map(({ status }) => status),
-    Array.from({ length: requestCount }, () => 201)
+    Array.from({ length: requestCount }, () => 201),
   );
 
   const bodies = await Promise.all(
     responses.map(
       async (response) =>
-        (await response.json()) as { article: { slug: string } }
-    )
+        (await response.json()) as { article: { slug: string } },
+    ),
   );
   const actualSlugs = bodies.map(({ article }) => article.slug);
 
   assert.equal(new Set(actualSlugs).size, requestCount);
   assert.deepEqual(
     actualSlugs.toSorted(),
-    expectedSlugsForTitle(title, requestCount).toSorted()
+    expectedSlugsForTitle(title, requestCount).toSorted(),
   );
   assert.equal(await prisma.article.count({ where: { title } }), requestCount);
 });
@@ -153,15 +153,15 @@ Create a temporary partial unique index in the isolated test database. The index
 Use `try/finally` so the index is removed even during a failing RED run:
 
 ```ts
-test('returns a safe 500 for a non-slug database constraint error', async () => {
-  const indexName = 'Article_phase3_test_title_key';
+test("returns a safe 500 for a non-slug database constraint error", async () => {
+  const indexName = "Article_phase3_test_title_key";
   const title = `Phase 3 unexpected database error ${randomUUID()}`;
-  const content = { type: 'doc', content: [] };
+  const content = { type: "doc", content: [] };
 
   await prisma.$executeRawUnsafe(`DROP INDEX IF EXISTS "${indexName}"`);
   await prisma.$executeRawUnsafe(
     `CREATE UNIQUE INDEX "${indexName}" ON "Article" ("title") ` +
-      `WHERE "title" = '${title}'`
+      `WHERE "title" = '${title}'`,
   );
 
   try {
@@ -171,7 +171,7 @@ test('returns a safe 500 for a non-slug database constraint error', async () => 
     const secondResponse = await postArticle({ title, content });
     assert.equal(secondResponse.status, 500);
     assert.deepEqual(await secondResponse.json(), {
-      message: 'Internal server error',
+      message: "Internal server error",
     });
     assert.equal(await prisma.article.count({ where: { title } }), 1);
   } finally {
@@ -226,7 +226,7 @@ Do not include production changes in this commit.
 Delete the existing async `createUniqueSlug()` and add these local types/helpers above `publicArticleSelect`:
 
 ```ts
-const articleSlugUniqueConstraint = 'Article_slug_key';
+const articleSlugUniqueConstraint = "Article_slug_key";
 
 type DriverConstraint = {
   fields?: unknown;
@@ -248,14 +248,14 @@ function normalizedFields(value: unknown): string[] {
   }
 
   return value
-    .filter((field): field is string => typeof field === 'string')
-    .map((field) => field.replace(/^"|"$/g, ''));
+    .filter((field): field is string => typeof field === "string")
+    .map((field) => field.replace(/^"|"$/g, ""));
 }
 
 function isSlugUniqueConstraintViolation(error: unknown): boolean {
   if (
     !(error instanceof Prisma.PrismaClientKnownRequestError) ||
-    error.code !== 'P2002'
+    error.code !== "P2002"
   ) {
     return false;
   }
@@ -264,14 +264,14 @@ function isSlugUniqueConstraintViolation(error: unknown): boolean {
   if (meta?.target === articleSlugUniqueConstraint) {
     return true;
   }
-  if (normalizedFields(meta?.target).includes('slug')) {
+  if (normalizedFields(meta?.target).includes("slug")) {
     return true;
   }
 
   const constraint = meta?.driverAdapterError?.cause?.constraint;
   return (
     constraint?.index === articleSlugUniqueConstraint ||
-    normalizedFields(constraint?.fields).includes('slug')
+    normalizedFields(constraint?.fields).includes("slug")
   );
 }
 ```
@@ -284,8 +284,8 @@ Keep edit-token generation before the loop. Replace the one-shot create in `crea
 
 ```ts
 export async function createArticle(input: CreateArticleInput) {
-  const editToken = randomBytes(32).toString('hex');
-  const baseSlug = slugify(input.title) || 'article';
+  const editToken = randomBytes(32).toString("hex");
+  const baseSlug = slugify(input.title) || "article";
   let suffix = 1;
 
   for (;;) {
