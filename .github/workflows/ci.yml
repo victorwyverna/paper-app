@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: paper-pg
+          POSTGRES_PASSWORD: paper-pwd
+          POSTGRES_DB: paper-db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U paper-pg -d paper-db"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://paper-pg:paper-pwd@localhost:5432/paper-db
+      S3_ENDPOINT: http://localhost:9000
+      S3_ACCESS_KEY: paper-minio
+      S3_SECRET_KEY: paper-pwd
+      S3_BUCKET: paper-ci
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.23.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Start MinIO
+        run: >-
+          docker run --detach --name paper-minio
+          --publish 9000:9000
+          --env MINIO_ROOT_USER=paper-minio
+          --env MINIO_ROOT_PASSWORD=paper-pwd
+          quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+          server /data
+
+      - name: Wait for MinIO
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent http://localhost:9000/minio/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs paper-minio
+          exit 1
+
+      - name: Apply database migrations
+        run: pnpm --filter @paper-app/backend db:migrate
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Type check
+        run: pnpm check-types
+
+      - name: Test preflight
+        run: node --test scripts/*.test.mjs && node scripts/assert-workspace-task.mjs test
+
+      - name: Frontend tests
+        run: pnpm --filter @paper-app/frontend test
+
+      - name: Backend integration tests
+        run: pnpm --filter @paper-app/backend test
+
+      - name: Build
+        run: pnpm build

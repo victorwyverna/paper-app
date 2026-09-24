@@ -9,11 +9,11 @@ export function createApp() {
     response.setHeader('Access-Control-Allow-Origin', frontendOrigin);
     response.setHeader(
       'Access-Control-Allow-Methods',
-      'GET, POST, PATCH, DELETE, OPTIONS',
+      'GET, POST, PATCH, DELETE, OPTIONS'
     );
     response.setHeader(
       'Access-Control-Allow-Headers',
-      'Content-Type, X-Edit-Token',
+      'Content-Type, X-Edit-Token'
     );
 
     if (request.method === 'OPTIONS') {

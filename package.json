@@ -6,7 +6,9 @@
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "check-types": "turbo run check-types"
+    "test": "node --test scripts/*.test.mjs && node scripts/assert-workspace-task.mjs test && turbo run test",
+    "format:check": "node scripts/assert-workspace-task.mjs format:check && turbo run format:check && prettier --check README.md \"docs/**/*.md\"",
+    "check-types": "node scripts/assert-workspace-task.mjs check-types && turbo run check-types"
   },
   "devDependencies": {
     "prettier": "3.9.6",
