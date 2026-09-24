@@ -21,6 +21,40 @@ const schema = createTiptapDocumentSchema({
 
 afterEach(cleanup);
 
+test.each([
+  ['example.com', 'https://example.com'],
+  ['writer@example.com', 'mailto:writer@example.com'],
+])('typing %s followed by a space emits a supported autolink', (text, href) => {
+  const editor = new Editor({ extensions: editorExtensions });
+  try {
+    editor.commands.insertContent(text);
+    editor.commands.insertContent(' ');
+    const document = editor.getJSON();
+    expect(document.content?.[0]?.content).toEqual([
+      {
+        type: 'text',
+        text,
+        marks: [
+          {
+            type: 'link',
+            attrs: {
+              href,
+              target: '_blank',
+              rel: 'noopener noreferrer',
+              class: null,
+              title: null,
+            },
+          },
+        ],
+      },
+      { type: 'text', text: ' ' },
+    ]);
+    expect(schema.parse(document)).toEqual(document);
+  } finally {
+    editor.destroy();
+  }
+});
+
 async function paste(data: Record<string, string | undefined>) {
   let document: TiptapDocument | undefined;
   render(
@@ -43,7 +77,13 @@ async function paste(data: Record<string, string | undefined>) {
   return document!;
 }
 
-test.each(['/relative', 'ftp://example.com/file', 'https:///example.com'])(
+test.each([
+  'example.com',
+  'writer@example.com',
+  '/relative',
+  'ftp://example.com/file',
+  'https:///example.com',
+])(
   'pasting an unsupported anchor keeps its text without a link: %s',
   async (href) => {
     const document = await paste({
@@ -56,6 +96,34 @@ test.each(['/relative', 'ftp://example.com/file', 'https:///example.com'])(
     expect(schema.parse(document)).toEqual(document);
   }
 );
+
+test.each([
+  'example.com',
+  'writer@example.com',
+  '/relative',
+  'ftp://example.com/file',
+  'https:///example.com',
+  'https://exa\nmple.com',
+  'https://example.com\\path',
+])('explicit link commands reject non-transport hrefs: %s', (href) => {
+  for (const command of ['setLink', 'toggleLink'] as const) {
+    const editor = new Editor({
+      extensions: editorExtensions,
+      content: '<p>Selected</p>',
+    });
+    try {
+      editor.commands.selectAll();
+      expect(editor.commands[command]({ href })).toBe(false);
+      const document = editor.getJSON();
+      expect(document.content?.[0]?.content).toEqual([
+        { type: 'text', text: 'Selected' },
+      ]);
+      expect(schema.parse(document)).toEqual(document);
+    } finally {
+      editor.destroy();
+    }
+  }
+});
 
 test('pasted supported links retain hrefs and use only Paper link metadata', async () => {
   const document = await paste({

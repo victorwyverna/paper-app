@@ -10,6 +10,27 @@ import { normalizeHrefInput, sanitizeHref } from '@/shared/lib/href';
 
 // Importing HTML must not let another site's presentation metadata enter JSON.
 const PaperLink = Link.extend({
+  parseHTML() {
+    return [
+      {
+        tag: 'a[href]',
+        getAttrs: (element) =>
+          sanitizeHref(element.getAttribute('href')) !== null ? null : false,
+      },
+    ];
+  },
+  addCommands() {
+    const commands = this.parent!();
+    return {
+      ...commands,
+      setLink: (attributes) => (props) =>
+        sanitizeHref(attributes.href) !== null &&
+        commands.setLink!(attributes)(props),
+      toggleLink: (attributes) => (props) =>
+        (!attributes?.href || sanitizeHref(attributes.href) !== null) &&
+        commands.toggleLink!(attributes)(props),
+    };
+  },
   addAttributes() {
     return {
       ...this.parent?.(),
@@ -61,7 +82,9 @@ export const editorExtensions = [
     autolink: true,
     defaultProtocol: 'https',
     openOnClick: false,
-    isAllowedUri: (href) => sanitizeHref(href) !== null,
+    // TipTap validates raw link text before generating its https:/mailto: href.
+    // Explicit commands and HTML anchors use the strict checks above instead.
+    isAllowedUri: (href) => !!normalizeHrefInput(href),
     // TipTap's selection-paste handler bypasses isAllowedUri.
     shouldAutoLink: (href) => !!normalizeHrefInput(href),
     HTMLAttributes: { target: '_blank', rel: 'noopener noreferrer' },
