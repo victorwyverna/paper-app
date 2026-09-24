@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import type { PropsWithChildren } from 'react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router';
@@ -70,6 +76,44 @@ afterEach(() => {
 });
 
 describe('ArticleEditPage', () => {
+  test.each([
+    { length: 200, expectedRequestCount: 2 },
+    { length: 201, expectedRequestCount: 1 },
+  ])(
+    'handles a $length-character title at the save boundary',
+    async ({ length, expectedRequestCount }) => {
+      localStorage.setItem(
+        `paper:edit-token:${article.slug}`,
+        'valid-owner-token'
+      );
+      const fetchMock = vi.fn().mockResolvedValue(okJson(article));
+      vi.stubGlobal('fetch', fetchMock);
+      renderPage();
+
+      const title = 'A'.repeat(length);
+      fireEvent.change(
+        await screen.findByRole('textbox', { name: 'Article title' }),
+        {
+          target: { value: title },
+        }
+      );
+      expect(screen.getByText(`${length}/200`)).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+      if (length === 201) {
+        expect(
+          screen.getByText('Keep the title under 200 characters.')
+        ).toBeTruthy();
+      } else {
+        await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+        const [, request] = fetchMock.mock.calls[1] as [string, RequestInit];
+        expect(request.method).toBe('PATCH');
+        expect(JSON.parse(String(request.body)).title).toBe(title);
+      }
+      expect(fetchMock).toHaveBeenCalledTimes(expectedRequestCount);
+    }
+  );
+
   test('blocks editing before loading the article when this browser has no edit token', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

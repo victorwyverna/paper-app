@@ -1,20 +1,6 @@
-export type TiptapMark = {
-  type: string;
-  attrs?: Record<string, unknown>;
-};
+import type { TiptapDocument } from '@paper-app/types';
 
-export type TiptapNode = {
-  type: string;
-  attrs?: Record<string, unknown>;
-  marks?: TiptapMark[];
-  text?: string;
-  content?: TiptapNode[];
-};
-
-export type TiptapDocument = {
-  type: 'doc';
-  content: TiptapNode[];
-};
+export type { TiptapDocument, TiptapMark, TiptapNode } from '@paper-app/types';
 
 export type Article = {
   id: number;

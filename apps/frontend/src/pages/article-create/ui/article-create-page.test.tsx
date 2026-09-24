@@ -49,6 +49,47 @@ afterEach(() => {
 });
 
 describe('ArticleCreatePage', () => {
+  test.each([
+    { length: 200, expectedRequestCount: 1 },
+    { length: 201, expectedRequestCount: 0 },
+  ])(
+    'handles a $length-character title at the publish boundary',
+    async ({ length, expectedRequestCount }) => {
+      const fetchMock = vi.fn().mockResolvedValue(createdArticleResponse());
+      vi.stubGlobal('fetch', fetchMock);
+      renderPage();
+
+      const title = 'A'.repeat(length);
+      fireEvent.change(screen.getByRole('textbox', { name: 'Article title' }), {
+        target: { value: title },
+      });
+      fireEvent.paste(screen.getByRole('textbox', { name: 'Article body' }), {
+        clipboardData: {
+          getData: (type: string) =>
+            type === 'text/plain' ? 'A complete article body' : '',
+          types: ['text/plain'],
+        },
+      });
+      await waitFor(() => {
+        expect(
+          screen.getByRole('textbox', { name: 'Article body' }).textContent
+        ).toBe('A complete article body');
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+
+      if (length === 201) {
+        expect(
+          screen.getByText('Keep the title under 200 characters.')
+        ).toBeTruthy();
+      } else {
+        await screen.findByText('Published');
+        const [, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+        expect(JSON.parse(String(request.body)).title).toBe(title);
+      }
+      expect(fetchMock).toHaveBeenCalledTimes(expectedRequestCount);
+    }
+  );
+
   test('uploads an image and publishes its URL in the TipTap document', async () => {
     const fetchMock = vi
       .fn()

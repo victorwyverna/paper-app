@@ -77,6 +77,10 @@ export function RichTextEditor({
         autolink: true,
         defaultProtocol: 'https',
         openOnClick: false,
+        HTMLAttributes: {
+          target: '_blank',
+          rel: 'noopener noreferrer',
+        },
       }),
       Image.configure({ allowBase64: false }),
       Underline,

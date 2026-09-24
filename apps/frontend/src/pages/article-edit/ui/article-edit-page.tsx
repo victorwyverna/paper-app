@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ARTICLE_TITLE_MAX_LENGTH } from '@paper-app/types';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 
@@ -99,6 +100,13 @@ function EditorForm({
             return;
           }
 
+          if (normalizedTitle.length > ARTICLE_TITLE_MAX_LENGTH) {
+            setTitleError(
+              `Keep the title under ${ARTICLE_TITLE_MAX_LENGTH} characters.`
+            );
+            return;
+          }
+
           setSaveError(null);
           setIsSaving(true);
 
@@ -132,10 +140,11 @@ function EditorForm({
               Article title
             </label>
             <textarea
-              aria-describedby="title-error"
+              aria-describedby="title-meta"
               aria-invalid={Boolean(titleError)}
               className={styles.titleInput}
               id="title"
+              maxLength={ARTICLE_TITLE_MAX_LENGTH}
               onChange={(event) => {
                 setTitle(event.target.value);
                 setTitleError(null);
@@ -143,13 +152,23 @@ function EditorForm({
               rows={2}
               value={title}
             />
-            <p
-              className={styles.fieldError}
-              id="title-error"
-              role={titleError ? 'alert' : undefined}
-            >
-              {titleError}
-            </p>
+            <div className={styles.fieldMeta} id="title-meta">
+              <span
+                className={styles.fieldError}
+                role={titleError ? 'alert' : undefined}
+              >
+                {titleError}
+              </span>
+              <span
+                className={
+                  title.length > ARTICLE_TITLE_MAX_LENGTH - 20
+                    ? styles.countVisible
+                    : styles.count
+                }
+              >
+                {title.length}/{ARTICLE_TITLE_MAX_LENGTH}
+              </span>
+            </div>
           </div>
 
           <div className={styles.rule} />

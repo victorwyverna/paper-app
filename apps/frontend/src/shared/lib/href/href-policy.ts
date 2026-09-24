@@ -1,4 +1,4 @@
-const SUPPORTED_LINK = /^(https?:|mailto:|\/|#)/i;
+const SUPPORTED_LINK = /^(https?:\/\/|mailto:)/i;
 const URL_SCHEME = /^[a-z][a-z\d+.-]*:/i;
 
 export function sanitizeHref(value: unknown): string | null {
@@ -6,9 +6,16 @@ export function sanitizeHref(value: unknown): string | null {
     return null;
   }
 
-  const href = value.trim();
+  if (!SUPPORTED_LINK.test(value)) {
+    return null;
+  }
 
-  return href && SUPPORTED_LINK.test(href) ? href : null;
+  try {
+    const url = new URL(value);
+    return ['http:', 'https:', 'mailto:'].includes(url.protocol) ? value : null;
+  } catch {
+    return null;
+  }
 }
 
 export function normalizeHrefInput(value: string): string | null {
@@ -24,9 +31,9 @@ export function normalizeHrefInput(value: string): string | null {
     return safeHref;
   }
 
-  if (URL_SCHEME.test(href)) {
+  if (URL_SCHEME.test(href) || href.startsWith('/') || href.startsWith('#')) {
     return null;
   }
 
-  return `https://${href}`;
+  return sanitizeHref(`https://${href}`);
 }

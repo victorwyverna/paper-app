@@ -11,22 +11,32 @@ describe('normalizeHrefInput', () => {
     'https://example.com/article',
     'http://example.com',
     'mailto:writer@example.com',
-    '/about',
-    '#chapter',
-  ])('keeps a supported link unchanged: %s', (href) => {
+  ])('keeps a supported absolute URL unchanged: %s', (href) => {
     expect(normalizeHrefInput(href)).toBe(href);
   });
 
   test('rejects unsupported URL schemes', () => {
     expect(normalizeHrefInput('javascript:alert(1)')).toBeNull();
   });
+
+  test.each(['/about', '#chapter', '//example.com/path', 'https:example.com'])(
+    'rejects a malformed or relative editor URL: %s',
+    (href) => {
+      expect(normalizeHrefInput(href)).toBeNull();
+    }
+  );
 });
 
 describe('sanitizeHref', () => {
-  test('keeps supported URLs and trims surrounding whitespace', () => {
-    expect(sanitizeHref(' https://example.com/article ')).toBe(
-      'https://example.com/article'
-    );
+  test.each([
+    '/about',
+    '#chapter',
+    '//example.com/path',
+    'javascript:alert(1)',
+    ' https://example.com',
+    'https:example.com',
+  ])('rejects a URL outside the article policy: %s', (href) => {
+    expect(sanitizeHref(href)).toBeNull();
   });
 
   test.each([undefined, '', 'example.com', 'javascript:alert(1)'])(

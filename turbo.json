@@ -9,13 +9,13 @@
       "dependsOn": ["^lint"]
     },
     "check-types": {
-      "dependsOn": ["^check-types"]
+      "dependsOn": ["^build", "^check-types"]
     },
     "format:check": {
       "dependsOn": ["^format:check"]
     },
     "test": {
-      "dependsOn": ["^test"],
+      "dependsOn": ["^build", "^test"],
       "env": [
         "DATABASE_URL",
         "S3_ENDPOINT",
