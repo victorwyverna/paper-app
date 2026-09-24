@@ -1,5 +1,4 @@
 import slugify from '@sindresorhus/slugify';
-import { randomBytes } from 'node:crypto';
 
 import { Prisma } from '../generated/prisma/client.js';
 import { prisma } from '../db/prisma.js';
@@ -7,6 +6,7 @@ import type {
   CreateArticleInput,
   UpdateArticleInput,
 } from '../schemas/article.js';
+import { generateEditToken, hashEditToken } from './edit-token.js';
 
 const articleSlugUniqueConstraint = 'Article_slug_key';
 
@@ -67,7 +67,8 @@ const publicArticleSelect = {
 } satisfies Prisma.ArticleSelect;
 
 export async function createArticle(input: CreateArticleInput) {
-  const editToken = randomBytes(32).toString('hex');
+  const editToken = generateEditToken();
+  const editTokenHash = hashEditToken(editToken);
   const baseSlug = slugify(input.title) || 'article';
   let suffix = 1;
 
@@ -78,7 +79,7 @@ export async function createArticle(input: CreateArticleInput) {
       const article = await prisma.article.create({
         data: {
           slug,
-          editToken,
+          editTokenHash,
           title: input.title,
           content: input.content as Prisma.InputJsonValue,
         },
@@ -114,7 +115,7 @@ export async function updateArticle(
   const result = await prisma.article.updateMany({
     where: {
       slug,
-      editToken,
+      editTokenHash: hashEditToken(editToken),
     },
     data: {
       ...(input.title !== undefined ? { title: input.title } : {}),
@@ -141,7 +142,7 @@ export async function deleteArticle(
   const result = await prisma.article.deleteMany({
     where: {
       slug,
-      editToken,
+      editTokenHash: hashEditToken(editToken),
     },
   });
 
