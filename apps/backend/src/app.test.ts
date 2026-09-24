@@ -194,13 +194,24 @@ test('creates an article and returns it publicly by slug', async () => {
   assert.equal(getResponse.status, 200);
 
   const article = (await getResponse.json()) as {
+    id: number;
     slug: string;
     title: string;
     content: unknown;
+    createdAt: string;
+    updatedAt: string;
     editToken?: unknown;
     editTokenHash?: unknown;
   };
 
+  assert.deepEqual(Object.keys(article).toSorted(), [
+    'content',
+    'createdAt',
+    'id',
+    'slug',
+    'title',
+    'updatedAt',
+  ]);
   assert.equal(article.slug, created.article.slug);
   assert.equal(article.title, title);
   assert.deepEqual(article.content, content);
@@ -446,12 +457,24 @@ test('updates an article with a valid edit token', async () => {
   assert.equal(updateResponse.status, 200);
 
   const updatedArticle = (await updateResponse.json()) as {
+    id: number;
     slug: string;
     title: string;
+    content: unknown;
+    createdAt: string;
+    updatedAt: string;
     editToken?: unknown;
     editTokenHash?: unknown;
   };
 
+  assert.deepEqual(Object.keys(updatedArticle).toSorted(), [
+    'content',
+    'createdAt',
+    'id',
+    'slug',
+    'title',
+    'updatedAt',
+  ]);
   assert.equal(updatedArticle.slug, created.article.slug);
   assert.equal(updatedArticle.title, updatedTitle);
   assert.equal(updatedArticle.editToken, undefined);
@@ -573,6 +596,48 @@ test('deletes an article with a valid edit token', async () => {
   );
 
   assert.equal(getResponse.status, 404);
+});
+
+test('hashes X-Edit-Token before the delete lookup', async () => {
+  const createResponse = await postArticle({
+    title: `Delete hash lookup ${randomUUID()}`,
+    content: { type: 'doc', content: [] },
+  });
+  const created = (await createResponse.json()) as {
+    article: { slug: string };
+    editToken: string;
+  };
+
+  const digestResponse = await fetch(
+    `${baseUrl}/articles/${created.article.slug}`,
+    {
+      method: 'DELETE',
+      headers: {
+        'X-Edit-Token': hashEditToken(created.editToken),
+      },
+    }
+  );
+
+  assert.equal(digestResponse.status, 403);
+  assert.deepEqual(await digestResponse.json(), {
+    message: 'Invalid edit token',
+  });
+
+  const survivingResponse = await fetch(
+    `${baseUrl}/articles/${created.article.slug}`
+  );
+  assert.equal(survivingResponse.status, 200);
+
+  const rawTokenResponse = await fetch(
+    `${baseUrl}/articles/${created.article.slug}`,
+    {
+      method: 'DELETE',
+      headers: {
+        'X-Edit-Token': created.editToken,
+      },
+    }
+  );
+  assert.equal(rawTokenResponse.status, 204);
 });
 
 test('returns 401 when deleting without an edit token', async () => {
