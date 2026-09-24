@@ -35,6 +35,12 @@ async function postArticle(input: unknown): Promise<Response> {
   return response;
 }
 
+function expectedSlugs(baseSlug: string, count: number): string[] {
+  return Array.from({ length: count }, (_, index) =>
+    index === 0 ? baseSlug : `${baseSlug}-${index + 1}`
+  );
+}
+
 async function createTestArticle(content: unknown): Promise<CreatedArticle> {
   const response = await postArticle({
     title: `Boundary article ${randomUUID()}`,
@@ -179,6 +185,93 @@ test('creates an article and returns it publicly by slug', async () => {
   assert.equal(article.title, title);
   assert.deepEqual(article.content, content);
   assert.equal(article.editToken, undefined);
+});
+
+test('increments slug suffixes for repeated article titles', async () => {
+  const id = randomUUID();
+  const title = `Repeated slug ${id}`;
+  const baseSlug = `repeated-slug-${id}`;
+  const content = { type: 'doc', content: [] };
+
+  const responses = [];
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    responses.push(await postArticle({ title, content }));
+  }
+
+  assert.deepEqual(
+    responses.map(({ status }) => status),
+    [201, 201, 201]
+  );
+
+  const bodies = await Promise.all(
+    responses.map(
+      async (response) =>
+        (await response.json()) as { article: { slug: string } }
+    )
+  );
+
+  assert.deepEqual(
+    bodies.map(({ article }) => article.slug),
+    expectedSlugs(baseSlug, 3)
+  );
+});
+
+test('creates distinct slugs for concurrent requests with the same title', async () => {
+  const requestCount = 8;
+  const id = randomUUID();
+  const title = `Concurrent slug ${id}`;
+  const baseSlug = `concurrent-slug-${id}`;
+  const content = { type: 'doc', content: [] };
+
+  const responses = await Promise.all(
+    Array.from({ length: requestCount }, () => postArticle({ title, content }))
+  );
+
+  assert.deepEqual(
+    responses.map(({ status }) => status),
+    Array.from({ length: requestCount }, () => 201)
+  );
+
+  const bodies = await Promise.all(
+    responses.map(
+      async (response) =>
+        (await response.json()) as { article: { slug: string } }
+    )
+  );
+  const actualSlugs = bodies.map(({ article }) => article.slug);
+
+  assert.equal(new Set(actualSlugs).size, requestCount);
+  assert.deepEqual(
+    actualSlugs.toSorted(),
+    expectedSlugs(baseSlug, requestCount).toSorted()
+  );
+  assert.equal(await prisma.article.count({ where: { title } }), requestCount);
+});
+
+test('returns a safe 500 for a non-slug database constraint error', async () => {
+  const indexName = 'Article_phase3_test_title_key';
+  const title = `Phase 3 unexpected database error ${randomUUID()}`;
+  const content = { type: 'doc', content: [] };
+
+  await prisma.$executeRawUnsafe(`DROP INDEX IF EXISTS "${indexName}"`);
+  await prisma.$executeRawUnsafe(
+    `CREATE UNIQUE INDEX "${indexName}" ON "Article" ("title") ` +
+      `WHERE "title" = '${title}'`
+  );
+
+  try {
+    const firstResponse = await postArticle({ title, content });
+    assert.equal(firstResponse.status, 201);
+
+    const secondResponse = await postArticle({ title, content });
+    assert.equal(secondResponse.status, 500);
+    assert.deepEqual(await secondResponse.json(), {
+      message: 'Internal server error',
+    });
+    assert.equal(await prisma.article.count({ where: { title } }), 1);
+  } finally {
+    await prisma.$executeRawUnsafe(`DROP INDEX IF EXISTS "${indexName}"`);
+  }
 });
 
 test('returns 400 when creating an article with invalid data', async () => {
