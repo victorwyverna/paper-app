@@ -138,6 +138,42 @@ describe('ArticleViewPage', () => {
     expect(editLink.getAttribute('href')).toBe('/a-public-story/edit');
   });
 
+  test('renders the validated ordered-list start and type', async () => {
+    const articleWithOrderedList = {
+      ...article,
+      content: {
+        type: 'doc',
+        content: [
+          {
+            type: 'orderedList',
+            attrs: { start: 3, type: 'A' },
+            content: [
+              {
+                type: 'listItem',
+                content: [
+                  {
+                    type: 'paragraph',
+                    content: [{ type: 'text', text: 'Third item' }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(okJson(articleWithOrderedList))
+    );
+
+    renderPage();
+
+    const list = (await screen.findByText('Third item')).closest('ol');
+    expect(list?.getAttribute('start')).toBe('3');
+    expect(list?.getAttribute('type')).toBe('A');
+  });
+
   test('shows a dedicated not-found state for a missing article', async () => {
     vi.stubGlobal(
       'fetch',

@@ -49,14 +49,61 @@ afterEach(() => {
 });
 
 describe('ArticleCreatePage', () => {
+  test.each([
+    { length: 200, expectedRequestCount: 1 },
+    { length: 201, expectedRequestCount: 0 },
+  ])(
+    'handles a $length-character title at the publish boundary',
+    async ({ length, expectedRequestCount }) => {
+      const fetchMock = vi.fn().mockResolvedValue(createdArticleResponse());
+      vi.stubGlobal('fetch', fetchMock);
+      renderPage();
+
+      const title = 'A'.repeat(length);
+      fireEvent.change(screen.getByRole('textbox', { name: 'Article title' }), {
+        target: { value: title },
+      });
+      fireEvent.paste(screen.getByRole('textbox', { name: 'Article body' }), {
+        clipboardData: {
+          getData: (type: string) =>
+            type === 'text/plain' ? 'A complete article body' : '',
+          types: ['text/plain'],
+        },
+      });
+      await waitFor(() => {
+        expect(
+          screen.getByRole('textbox', { name: 'Article body' }).textContent
+        ).toBe('A complete article body');
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+
+      if (length === 201) {
+        expect(
+          screen.getByText('Keep the title under 200 characters.')
+        ).toBeTruthy();
+      } else {
+        await screen.findByText('Published');
+        const [, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+        expect(JSON.parse(String(request.body)).title).toBe(title);
+      }
+      expect(fetchMock).toHaveBeenCalledTimes(expectedRequestCount);
+    }
+  );
+
   test('uploads an image and publishes its URL in the TipTap document', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ key: 'uploaded-image.png' }), {
-          status: 201,
-          headers: { 'Content-Type': 'application/json' },
-        })
+        new Response(
+          JSON.stringify({
+            key: '550e8400-e29b-41d4-a716-446655440000.png',
+            url: 'https://paper.test/uploads/550e8400-e29b-41d4-a716-446655440000.png',
+          }),
+          {
+            status: 201,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
       )
       .mockResolvedValueOnce(createdArticleResponse());
     vi.stubGlobal('fetch', fetchMock);
@@ -77,7 +124,7 @@ describe('ArticleCreatePage', () => {
       name: 'paper boat.png',
     })) as HTMLImageElement;
     expect(image.getAttribute('src')).toBe(
-      'http://localhost:3000/uploads/uploaded-image.png'
+      'https://paper.test/uploads/550e8400-e29b-41d4-a716-446655440000.png'
     );
     fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
 
@@ -98,7 +145,7 @@ describe('ArticleCreatePage', () => {
           {
             type: 'image',
             attrs: {
-              src: 'http://localhost:3000/uploads/uploaded-image.png',
+              src: 'https://paper.test/uploads/550e8400-e29b-41d4-a716-446655440000.png',
               alt: 'paper boat.png',
               title: null,
               width: null,

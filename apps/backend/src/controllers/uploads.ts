@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { buildPublicUploadUrl } from '../config/public-api.js';
 
 import { PayloadTooLargeError, readImageBody, sendJson } from '../lib/http.js';
 import { getFile, uploadFile } from '../storage/s3.js';
@@ -48,7 +49,7 @@ export async function uploadImageController(
 
   await uploadFile(key, image, contentType);
 
-  sendJson(response, 201, { key });
+  sendJson(response, 201, { key, url: buildPublicUploadUrl(key) });
 }
 
 export async function getImageController(

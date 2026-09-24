@@ -1,8 +1,4 @@
-import Image from '@tiptap/extension-image';
-import Link from '@tiptap/extension-link';
-import Underline from '@tiptap/extension-underline';
 import { EditorContent, useEditor } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
 import { useEffect, useReducer, useRef, useState } from 'react';
 
 import type { TiptapDocument } from '@/entities/article';
@@ -11,6 +7,7 @@ import { ApiError } from '@/shared/api';
 import { normalizeHrefInput } from '@/shared/lib/href';
 
 import { uploadImage } from '../api/upload-image';
+import { editorExtensions } from '../model/editor-extensions';
 
 import styles from './rich-text-editor.module.css';
 
@@ -67,20 +64,7 @@ export function RichTextEditor({
   const [uploadingImage, setUploadingImage] = useState(false);
   const editor = useEditor({
     content: value,
-    extensions: [
-      StarterKit.configure({
-        heading: { levels: [2, 3] },
-        link: false,
-        underline: false,
-      }),
-      Link.configure({
-        autolink: true,
-        defaultProtocol: 'https',
-        openOnClick: false,
-      }),
-      Image.configure({ allowBase64: false }),
-      Underline,
-    ],
+    extensions: editorExtensions,
     editorProps: {
       attributes: {
         'aria-describedby': describedBy,

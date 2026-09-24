@@ -1,4 +1,5 @@
 import { useForm } from '@tanstack/react-form';
+import { ARTICLE_TITLE_MAX_LENGTH } from '@paper-app/types';
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -12,8 +13,6 @@ import { RichTextEditor } from '@/features/article-editor';
 import { ApiError } from '@/shared/api';
 
 import styles from './article-create-page.module.css';
-
-const MAX_TITLE_LENGTH = 200;
 
 function getFieldError(errors: readonly unknown[]): string {
   const error = errors[0];
@@ -128,8 +127,8 @@ export function ArticleCreatePage() {
             name="title"
             validators={{
               onChange: ({ value }) =>
-                value.length > MAX_TITLE_LENGTH
-                  ? `Keep the title under ${MAX_TITLE_LENGTH} characters.`
+                value.length > ARTICLE_TITLE_MAX_LENGTH
+                  ? `Keep the title under ${ARTICLE_TITLE_MAX_LENGTH} characters.`
                   : undefined,
               onBlur: ({ value }) =>
                 value.trim() ? undefined : 'Give your story a title.',
@@ -148,7 +147,7 @@ export function ArticleCreatePage() {
                   autoFocus
                   className={styles.titleInput}
                   id={field.name}
-                  maxLength={MAX_TITLE_LENGTH + 1}
+                  maxLength={ARTICLE_TITLE_MAX_LENGTH}
                   name={field.name}
                   onBlur={field.handleBlur}
                   onChange={(event) => field.handleChange(event.target.value)}
@@ -162,12 +161,12 @@ export function ArticleCreatePage() {
                   </span>
                   <span
                     className={
-                      field.state.value.length > MAX_TITLE_LENGTH - 20
+                      field.state.value.length > ARTICLE_TITLE_MAX_LENGTH - 20
                         ? styles.countVisible
                         : styles.count
                     }
                   >
-                    {field.state.value.length}/{MAX_TITLE_LENGTH}
+                    {field.state.value.length}/{ARTICLE_TITLE_MAX_LENGTH}
                   </span>
                 </div>
               </div>

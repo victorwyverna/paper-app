@@ -75,8 +75,28 @@ function renderNode(node: TiptapNode, key: number): ReactNode {
     }
     case 'bulletList':
       return <ul key={key}>{children}</ul>;
-    case 'orderedList':
-      return <ol key={key}>{children}</ol>;
+    case 'orderedList': {
+      const start = node.attrs?.start;
+      const type = node.attrs?.type;
+      const orderedListType =
+        type === '1' ||
+        type === 'a' ||
+        type === 'A' ||
+        type === 'i' ||
+        type === 'I'
+          ? type
+          : undefined;
+
+      return (
+        <ol
+          key={key}
+          start={typeof start === 'number' ? start : undefined}
+          type={orderedListType}
+        >
+          {children}
+        </ol>
+      );
+    }
     case 'listItem':
       return <li key={key}>{children}</li>;
     case 'blockquote':

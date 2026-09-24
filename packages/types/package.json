@@ -1,5 +1,25 @@
 {
   "name": "@paper-app/types",
   "version": "0.0.0",
-  "private": true
+  "private": true,
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check-types": "tsc --noEmit -p tsconfig.json",
+    "format": "prettier --write src package.json tsconfig.json",
+    "format:check": "prettier --check src package.json tsconfig.json"
+  },
+  "devDependencies": {
+    "prettier": "3.9.6",
+    "typescript": "7.0.2"
+  }
 }
