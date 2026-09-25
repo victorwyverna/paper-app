@@ -429,9 +429,7 @@ describe('ArticleCreatePage', () => {
     renderPage();
 
     await publishValidDraft();
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Copy token' })
-    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Copy token' }));
 
     expect((await screen.findByRole('status')).textContent).toContain(
       'Edit token copied.'
@@ -446,9 +444,7 @@ describe('ArticleCreatePage', () => {
     renderPage();
 
     await publishValidDraft();
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Copy token' })
-    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Copy token' }));
 
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain(
@@ -473,12 +469,12 @@ describe('ArticleCreatePage', () => {
     });
     let clickedDownload = '';
     let clickedHref = '';
-    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(
-      function (this: HTMLAnchorElement) {
-        clickedDownload = this.download;
-        clickedHref = this.href;
-      }
-    );
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement
+    ) {
+      clickedDownload = this.download;
+      clickedHref = this.href;
+    });
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(createdArticleResponse()));
     renderPage();
 

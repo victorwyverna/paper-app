@@ -6,9 +6,8 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
-import type { PropsWithChildren } from 'react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { createMemoryRouter, RouterProvider } from 'react-router';
 
 import { ArticleViewPage } from '@/pages/article-view';
 
@@ -35,30 +34,28 @@ function renderPage({ useRealArticleView = false } = {}) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: 30_000 } },
   });
-
-  function Wrapper({ children }: PropsWithChildren) {
-    return (
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={[`/${article.slug}/edit`]}>
-          {children}
-        </MemoryRouter>
-      </QueryClientProvider>
-    );
-  }
-
-  return render(
-    <Routes>
-      <Route path=":slug/edit" element={<ArticleEditPage />} />
-      <Route
-        path=":slug"
-        element={
-          useRealArticleView ? <ArticleViewPage /> : <p>Published article</p>
-        }
-      />
-      <Route index element={<p>New article</p>} />
-    </Routes>,
-    { wrapper: Wrapper }
+  const router = createMemoryRouter(
+    [
+      { path: '/:slug/edit', element: <ArticleEditPage /> },
+      {
+        path: '/:slug',
+        element: useRealArticleView ? (
+          <ArticleViewPage />
+        ) : (
+          <p>Published article</p>
+        ),
+      },
+      { path: '/', element: <p>New article</p> },
+    ],
+    { initialEntries: [`/${article.slug}/edit`] }
   );
+  const rendered = render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
+  );
+
+  return { ...rendered, router };
 }
 
 function okJson(body: unknown): Response {
@@ -77,11 +74,19 @@ afterEach(() => {
 
 describe('ArticleEditPage', () => {
   test.each([
-    { length: 200, expectedRequestCount: 2 },
-    { length: 201, expectedRequestCount: 1 },
+    {
+      trimmedLength: 200,
+      value: ` ${'A'.repeat(200)} `,
+      expectedRequestCount: 2,
+    },
+    {
+      trimmedLength: 201,
+      value: ` ${'A'.repeat(201)} `,
+      expectedRequestCount: 1,
+    },
   ])(
-    'handles a $length-character title at the save boundary',
-    async ({ length, expectedRequestCount }) => {
+    'handles a $trimmedLength-character title at the save boundary',
+    async ({ trimmedLength, value, expectedRequestCount }) => {
       localStorage.setItem(
         `paper:edit-token:${article.slug}`,
         'valid-owner-token'
@@ -90,17 +95,16 @@ describe('ArticleEditPage', () => {
       vi.stubGlobal('fetch', fetchMock);
       renderPage();
 
-      const title = 'A'.repeat(length);
       fireEvent.change(
         await screen.findByRole('textbox', { name: 'Article title' }),
         {
-          target: { value: title },
+          target: { value },
         }
       );
-      expect(screen.getByText(`${length}/200`)).toBeTruthy();
+      expect(screen.getByText(`${value.length}/200`)).toBeTruthy();
       fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
-      if (length === 201) {
+      if (trimmedLength === 201) {
         expect(
           screen.getByText('Keep the title under 200 characters.')
         ).toBeTruthy();
@@ -108,7 +112,7 @@ describe('ArticleEditPage', () => {
         await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
         const [, request] = fetchMock.mock.calls[1] as [string, RequestInit];
         expect(request.method).toBe('PATCH');
-        expect(JSON.parse(String(request.body)).title).toBe(title);
+        expect(JSON.parse(String(request.body)).title).toBe('A'.repeat(200));
       }
       expect(fetchMock).toHaveBeenCalledTimes(expectedRequestCount);
     }
@@ -123,6 +127,10 @@ describe('ArticleEditPage', () => {
     expect(
       screen.getByRole('heading', { name: 'Edit access unavailable' })
     ).toBeTruthy();
+    expect(
+      screen.getByText(/this browser does not have a saved edit token/i)
+        .textContent
+    ).toContain('Paper cannot recover a lost token.');
     expect(screen.getByRole('link', { name: 'Back to article' })).toBeTruthy();
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -171,6 +179,9 @@ describe('ArticleEditPage', () => {
     expect(
       await screen.findByRole('heading', { name: 'A revised story' })
     ).toBeTruthy();
+    expect(
+      screen.queryByRole('heading', { name: 'Discard unsaved changes?' })
+    ).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const [requestUrl, request] = fetchMock.mock.calls[1] as [
       string,
@@ -185,6 +196,11 @@ describe('ArticleEditPage', () => {
       title: 'A revised story',
       content: article.content,
     });
+    const departureAfterSave = new Event('beforeunload', {
+      cancelable: true,
+    });
+    window.dispatchEvent(departureAfterSave);
+    expect(departureAfterSave.defaultPrevented).toBe(false);
   });
 
   test('reveals an inline deletion warning that can be cancelled', async () => {
@@ -229,6 +245,9 @@ describe('ArticleEditPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }));
 
     expect(await screen.findByText('New article')).toBeTruthy();
+    expect(
+      screen.queryByRole('heading', { name: 'Discard unsaved changes?' })
+    ).toBeNull();
     expect(localStorage.getItem(`paper:edit-token:${article.slug}`)).toBeNull();
     const [requestUrl, request] = fetchMock.mock.calls[1] as [
       string,
@@ -282,13 +301,121 @@ describe('ArticleEditPage', () => {
     const title = (await screen.findByRole('textbox', {
       name: 'Article title',
     })) as HTMLTextAreaElement;
+    const body = screen.getByRole('textbox', { name: 'Article body' });
     fireEvent.change(title, { target: { value: 'Unsaved revision' } });
+    fireEvent.paste(body, {
+      clipboardData: {
+        getData: (type: string) =>
+          type === 'text/plain' ? 'Unsaved body revision' : '',
+        types: ['text/plain'],
+      },
+    });
+    await waitFor(() => {
+      expect(body.textContent).toContain('Unsaved body revision');
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
+    const invalidAccess = await screen.findByText(
+      'Edit access is no longer valid in this browser.'
+    );
+    expect(invalidAccess.textContent).not.toContain('reach the server');
+    expect(title.value).toBe('Unsaved revision');
+    expect(body.textContent).toContain('Unsaved body revision');
+    expect(localStorage.getItem(`paper:edit-token:${article.slug}`)).toBeNull();
+    const departureAfterFailure = new Event('beforeunload', {
+      cancelable: true,
+    });
+    window.dispatchEvent(departureAfterFailure);
+    expect(departureAfterFailure.defaultPrevented).toBe(true);
+    fireEvent.click(screen.getByRole('link', { name: 'View article' }));
+
     expect(
-      await screen.findByText('Edit access is no longer valid in this browser.')
+      await screen.findByRole('heading', { name: 'Discard unsaved changes?' })
     ).toBeTruthy();
     expect(title.value).toBe('Unsaved revision');
-    expect(localStorage.getItem(`paper:edit-token:${article.slug}`)).toBeNull();
+    expect(body.textContent).toContain('Unsaved body revision');
+  });
+
+  test('lets an author stay with a changed title or explicitly discard it', async () => {
+    localStorage.setItem(
+      `paper:edit-token:${article.slug}`,
+      'valid-owner-token'
+    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(okJson(article)));
+    const { router } = renderPage();
+
+    const title = (await screen.findByRole('textbox', {
+      name: 'Article title',
+    })) as HTMLTextAreaElement;
+    fireEvent.change(title, { target: { value: 'Unpublished title' } });
+    fireEvent.click(screen.getByRole('link', { name: 'View article' }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Discard unsaved changes?' })
+    ).toBeTruthy();
+    expect(router.state.location.pathname).toBe('/editable-story/edit');
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Stay and keep editing' })
+    );
+
+    expect(
+      screen.queryByRole('heading', { name: 'Discard unsaved changes?' })
+    ).toBeNull();
+    expect(title.value).toBe('Unpublished title');
+    fireEvent.click(screen.getByRole('link', { name: 'View article' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Discard changes' })
+    );
+
+    expect(await screen.findByText('Published article')).toBeTruthy();
+    expect(router.state.location.pathname).toBe('/editable-story');
+  });
+
+  test('blocks navigation when only the article body changed', async () => {
+    localStorage.setItem(
+      `paper:edit-token:${article.slug}`,
+      'valid-owner-token'
+    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(okJson(article)));
+    const { router } = renderPage();
+
+    const body = await screen.findByRole('textbox', { name: 'Article body' });
+    fireEvent.paste(body, {
+      clipboardData: {
+        getData: (type: string) =>
+          type === 'text/plain' ? 'Body-only revision' : '',
+        types: ['text/plain'],
+      },
+    });
+    await waitFor(() => {
+      expect(body.textContent).toContain('Body-only revision');
+    });
+    fireEvent.click(screen.getByRole('link', { name: 'View article' }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Discard unsaved changes?' })
+    ).toBeTruthy();
+    expect(router.state.location.pathname).toBe('/editable-story/edit');
+  });
+
+  test('warns on browser departure only after the draft becomes dirty', async () => {
+    localStorage.setItem(
+      `paper:edit-token:${article.slug}`,
+      'valid-owner-token'
+    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(okJson(article)));
+    renderPage();
+
+    const title = await screen.findByRole('textbox', {
+      name: 'Article title',
+    });
+    const cleanDeparture = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(cleanDeparture);
+    expect(cleanDeparture.defaultPrevented).toBe(false);
+
+    fireEvent.change(title, { target: { value: 'Dirty browser draft' } });
+    const dirtyDeparture = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(dirtyDeparture);
+    expect(dirtyDeparture.defaultPrevented).toBe(true);
   });
 });

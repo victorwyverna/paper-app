@@ -53,8 +53,8 @@ export function ArticleRecoveryState({
 
       {storageSucceeded ? (
         <p className={styles.recoveryNotice}>
-          Edit access is stored only in this browser. Copy or download the
-          token before browser data is cleared or you move to another device.
+          Edit access is stored only in this browser. Copy or download the token
+          before browser data is cleared or you move to another device.
         </p>
       ) : (
         <p className={styles.recoveryWarning} role="alert">
