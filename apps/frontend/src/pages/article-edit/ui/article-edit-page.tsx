@@ -61,6 +61,7 @@ function EditorForm({
     article.content
   );
   const allowDepartureRef = useRef(false);
+  const draftRevisionRef = useRef(0);
   const discardHeadingRef = useRef<HTMLHeadingElement>(null);
   const isDirty =
     title !== article.title ||
@@ -134,6 +135,7 @@ function EditorForm({
 
           setSaveError(null);
           setIsSaving(true);
+          const submittedRevision = draftRevisionRef.current;
 
           try {
             const updatedArticle = await updateArticle(
@@ -145,8 +147,10 @@ function EditorForm({
               }
             );
             queryClient.setQueryData(['article', article.slug], updatedArticle);
-            allowDepartureRef.current = true;
-            navigate(paths.article(article.slug), { replace: true });
+            if (draftRevisionRef.current === submittedRevision) {
+              allowDepartureRef.current = true;
+              navigate(paths.article(article.slug), { replace: true });
+            }
           } catch (error) {
             setSaveError(
               getActionError(
@@ -172,6 +176,7 @@ function EditorForm({
               id="title"
               maxLength={ARTICLE_TITLE_MAX_LENGTH}
               onChange={(event) => {
+                draftRevisionRef.current += 1;
                 setTitle(event.target.value);
                 setTitleError(null);
               }}
@@ -208,7 +213,10 @@ function EditorForm({
               id="body"
               invalid={false}
               onBlur={() => undefined}
-              onChange={(document) => setBodyDocument(document)}
+              onChange={(document) => {
+                draftRevisionRef.current += 1;
+                setBodyDocument(document);
+              }}
               value={bodyDocument}
             />
             <p className={styles.fieldError} id="body-error" />
@@ -358,7 +366,7 @@ function ArticleEditPageForSlug({ slug }: { slug: string }) {
     );
   }
 
-  if (articleQuery.isError) {
+  if (articleQuery.isError && !articleQuery.data) {
     return (
       <section className={styles.statePage}>
         <p className={styles.eyebrow}>Connection interrupted</p>

@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -55,7 +56,16 @@ function renderPage({ useRealArticleView = false } = {}) {
     </QueryClientProvider>
   );
 
-  return { ...rendered, router };
+  return { ...rendered, queryClient, router };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+
+  return { promise, resolve };
 }
 
 function okJson(body: unknown): Response {
@@ -417,5 +427,70 @@ describe('ArticleEditPage', () => {
     const dirtyDeparture = new Event('beforeunload', { cancelable: true });
     window.dispatchEvent(dirtyDeparture);
     expect(dirtyDeparture.defaultPrevented).toBe(true);
+  });
+
+  test('keeps edits made while a save is pending and leaves them protected', async () => {
+    localStorage.setItem(
+      `paper:edit-token:${article.slug}`,
+      'valid-owner-token'
+    );
+    const pendingUpdate = deferred<Response>();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(okJson(article))
+      .mockReturnValueOnce(pendingUpdate.promise);
+    vi.stubGlobal('fetch', fetchMock);
+    const { router } = renderPage();
+
+    const title = (await screen.findByRole('textbox', {
+      name: 'Article title',
+    })) as HTMLTextAreaElement;
+    fireEvent.change(title, { target: { value: 'Submitted title' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    fireEvent.change(title, { target: { value: 'Newer unsaved title' } });
+    pendingUpdate.resolve(okJson({ ...article, title: 'Submitted title' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeTruthy();
+    });
+    expect(router.state.location.pathname).toBe('/editable-story/edit');
+    expect(title.value).toBe('Newer unsaved title');
+    const departure = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(departure);
+    expect(departure.defaultPrevented).toBe(true);
+  });
+
+  test('preserves a dirty draft through failed and recovered background refreshes', async () => {
+    localStorage.setItem(
+      `paper:edit-token:${article.slug}`,
+      'valid-owner-token'
+    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(okJson(article))
+      .mockRejectedValueOnce(new Error('Refresh failed'))
+      .mockResolvedValueOnce(okJson(article));
+    vi.stubGlobal('fetch', fetchMock);
+    const { queryClient } = renderPage();
+
+    const title = (await screen.findByRole('textbox', {
+      name: 'Article title',
+    })) as HTMLTextAreaElement;
+    fireEvent.change(title, { target: { value: 'Draft across refresh' } });
+
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: ['article', article.slug] });
+    });
+    expect(screen.getByRole('textbox', { name: 'Article title' })).toBe(title);
+    expect(title.value).toBe('Draft across refresh');
+
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: ['article', article.slug] });
+    });
+    expect(title.value).toBe('Draft across refresh');
+    const departure = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(departure);
+    expect(departure.defaultPrevented).toBe(true);
   });
 });
