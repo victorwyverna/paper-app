@@ -9,6 +9,10 @@ export {
   removeArticleEditToken,
   saveArticleEditToken,
 } from './model/edit-access';
+export {
+  normalizeArticleTitle,
+  validateArticleTitle,
+} from './model/article-title';
 export { ArticleContent } from './ui/article-content';
 export type {
   Article,
