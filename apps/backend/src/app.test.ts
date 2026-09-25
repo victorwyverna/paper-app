@@ -60,6 +60,25 @@ function requestBody(bytes: Buffer): Uint8Array<ArrayBuffer> {
   return body;
 }
 
+async function seedTrackedUpload(
+  options: {
+    key?: string;
+    attachedAt?: Date;
+  } = {}
+): Promise<{ key: string; src: string }> {
+  const key = options.key ?? `${randomUUID()}.png`;
+  uploadedKeys.push(key);
+  await prisma.upload.create({
+    data: {
+      objectKey: key,
+      detectedContentType: 'image/png',
+      byteSize: pngFixture().byteLength,
+      ...(options.attachedAt ? { attachedAt: options.attachedAt } : {}),
+    },
+  });
+  return { key, src: `${process.env.PUBLIC_API_URL}/uploads/${key}` };
+}
+
 async function postArticle(input: unknown): Promise<Response> {
   const response = await fetch(`${baseUrl}/articles`, {
     method: 'POST',
@@ -895,6 +914,165 @@ const doc = (...content: unknown[]) => ({ type: 'doc', content });
 const paragraph = { type: 'paragraph' };
 const text = { type: 'text', text: 'Original content' };
 const inline = (node: unknown) => doc({ type: 'paragraph', content: [node] });
+const imageNode = (src: string) => ({ type: 'image', attrs: { src } });
+
+async function patchArticle(
+  article: CreatedArticle,
+  input: unknown,
+  editToken = article.editToken
+): Promise<Response> {
+  return fetch(`${baseUrl}/articles/${article.slug}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Edit-Token': editToken,
+    },
+    body: JSON.stringify(input),
+  });
+}
+
+test('article create sets one attachedAt for every unique upload key', async () => {
+  const first = await seedTrackedUpload();
+  const second = await seedTrackedUpload();
+  const content = doc(
+    imageNode(first.src),
+    imageNode(second.src),
+    imageNode(first.src)
+  );
+
+  const response = await postArticle({
+    title: `Attach uploads ${randomUUID()}`,
+    content,
+  });
+  assert.equal(response.status, 201);
+
+  const rows = await prisma.upload.findMany({
+    where: { objectKey: { in: [first.key, second.key] } },
+    orderBy: { objectKey: 'asc' },
+  });
+  assert.equal(rows.length, 2);
+  assert.ok(rows[0]?.attachedAt);
+  assert.equal(rows[0]?.attachedAt?.getTime(), rows[1]?.attachedAt?.getTime());
+});
+
+test('content update attaches new uploads without changing prior timestamps', async () => {
+  const first = await seedTrackedUpload();
+  const created = await createTestArticle(doc(imageNode(first.src)));
+  const firstAttachedAt = (
+    await prisma.upload.findUniqueOrThrow({ where: { objectKey: first.key } })
+  ).attachedAt;
+  assert.ok(firstAttachedAt);
+
+  const second = await seedTrackedUpload();
+  const response = await patchArticle(created, {
+    content: doc(imageNode(first.src), imageNode(second.src)),
+  });
+  assert.equal(response.status, 200);
+
+  const [firstAfter, secondAfter] = await Promise.all([
+    prisma.upload.findUniqueOrThrow({ where: { objectKey: first.key } }),
+    prisma.upload.findUniqueOrThrow({ where: { objectKey: second.key } }),
+  ]);
+  assert.equal(firstAfter.attachedAt?.getTime(), firstAttachedAt.getTime());
+  assert.ok(secondAfter.attachedAt);
+
+  const titleResponse = await patchArticle(created, { title: 'Title only' });
+  assert.equal(titleResponse.status, 200);
+  assert.equal(
+    (
+      await prisma.upload.findUniqueOrThrow({
+        where: { objectKey: second.key },
+      })
+    ).attachedAt?.getTime(),
+    secondAfter.attachedAt.getTime()
+  );
+});
+
+test('reuse, removal, and article deletion never clear attachedAt', async () => {
+  const originalAttachedAt = new Date('2026-01-02T03:04:05.000Z');
+  const upload = await seedTrackedUpload({ attachedAt: originalAttachedAt });
+  const created = await createTestArticle(doc(imageNode(upload.src)));
+  assert.equal((await patchArticle(created, { content: doc() })).status, 200);
+  assert.equal(
+    (
+      await prisma.upload.findUniqueOrThrow({
+        where: { objectKey: upload.key },
+      })
+    ).attachedAt?.getTime(),
+    originalAttachedAt.getTime()
+  );
+
+  assert.equal(
+    (
+      await fetch(`${baseUrl}/articles/${created.slug}`, {
+        method: 'DELETE',
+        headers: { 'X-Edit-Token': created.editToken },
+      })
+    ).status,
+    204
+  );
+  assert.ok(
+    await prisma.upload.findUnique({ where: { objectKey: upload.key } })
+  );
+});
+
+test('missing upload rolls back article create and authenticated update', async () => {
+  const missingSrc = `${process.env.PUBLIC_API_URL}/uploads/${randomUUID()}.png`;
+  const title = `Missing upload ${randomUUID()}`;
+  const createResponse = await postArticle({
+    title,
+    content: doc(imageNode(missingSrc)),
+  });
+  assert.equal(createResponse.status, 400);
+  assert.deepEqual(await createResponse.json(), {
+    message: 'Invalid article data',
+  });
+  assert.equal(await prisma.article.count({ where: { title } }), 0);
+
+  const created = await createTestArticle(doc());
+  const response = await patchArticle(created, {
+    title: 'Must roll back',
+    content: doc(imageNode(missingSrc)),
+  });
+  assert.equal(response.status, 400);
+  const unchanged = await prisma.article.findUniqueOrThrow({
+    where: { slug: created.slug },
+  });
+  assert.notEqual(unchanged.title, 'Must roll back');
+});
+
+test('invalid edit token does not disclose a missing upload', async () => {
+  const created = await createTestArticle(doc());
+  const missingSrc = `${process.env.PUBLIC_API_URL}/uploads/${randomUUID()}.png`;
+  const response = await patchArticle(
+    created,
+    { content: doc(imageNode(missingSrc)) },
+    'invalid-token'
+  );
+  assert.equal(response.status, 403);
+  assert.deepEqual(await response.json(), { message: 'Invalid edit token' });
+});
+
+test('concurrent article creates retain slug retries with tracked uploads', async () => {
+  const upload = await seedTrackedUpload();
+  const title = `Concurrent attached slug ${randomUUID()}`;
+  const responses = await Promise.all(
+    Array.from({ length: 4 }, () =>
+      postArticle({ title, content: doc(imageNode(upload.src)) })
+    )
+  );
+  assert.deepEqual(
+    responses.map(({ status }) => status),
+    [201, 201, 201, 201]
+  );
+  assert.ok(
+    (
+      await prisma.upload.findUniqueOrThrow({
+        where: { objectKey: upload.key },
+      })
+    ).attachedAt
+  );
+});
 
 // Same root-inclusive builders as the schema tests, exercised through HTTP here.
 function documentAtDepth(depth: number, leaf: unknown = paragraph): unknown {
@@ -1028,15 +1206,6 @@ for (const [name, content] of invalidStructures) {
 for (const [name, content] of [
   ['depth 20', documentAtDepth(20)],
   ['10,000 nodes', documentWithNodes(10_000)],
-  [
-    'canonical image URL',
-    doc({
-      type: 'image',
-      attrs: {
-        src: 'http://localhost:3000/uploads/550e8400-e29b-41d4-a716-446655440000.png',
-      },
-    }),
-  ],
 ] as const) {
   test(`POST persists ${name} unchanged`, async () => {
     const { slug } = await createTestArticle(content);
@@ -1045,6 +1214,17 @@ for (const [name, content] of [
     assert.deepEqual((await response.json()).content, content);
   });
 }
+
+test('POST persists a tracked canonical image URL unchanged', async () => {
+  const upload = await seedTrackedUpload({
+    key: '550e8400-e29b-41d4-a716-446655440000.png',
+  });
+  const content = doc(imageNode(upload.src));
+  const { slug } = await createTestArticle(content);
+  const response = await fetch(`${baseUrl}/articles/${slug}`);
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).content, content);
+});
 
 for (const [name, content] of [
   ['depth 21', documentAtDepth(21)],

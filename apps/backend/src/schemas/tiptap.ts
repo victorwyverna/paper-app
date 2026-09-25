@@ -1,6 +1,7 @@
 import type { TiptapDocument } from '@paper-app/types';
 import { z } from 'zod';
 import { publicApiUrl } from '../config/public-api.js';
+import { parseCanonicalUploadKey } from '../lib/upload-key.js';
 
 const TIPTAP_MAX_DEPTH = 20;
 const TIPTAP_MAX_NODES = 10_000;
@@ -100,27 +101,6 @@ function validMarks(marks: unknown): boolean {
     }
   }
   return true;
-}
-
-function isUploadSrc(value: unknown, uploadOrigin: string): boolean {
-  if (typeof value !== 'string') return false;
-  try {
-    const url = new URL(value);
-    return (
-      // Match the emitted URL exactly, including absence of empty ?/# suffixes.
-      `${url.origin}${url.pathname}` === value &&
-      url.origin === uploadOrigin &&
-      url.username === '' &&
-      url.password === '' &&
-      url.search === '' &&
-      url.hash === '' &&
-      /^\/uploads\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:jpg|png|webp|gif)$/.test(
-        url.pathname
-      )
-    );
-  } catch {
-    return false;
-  }
 }
 
 export function createTiptapDocumentSchema({
@@ -233,7 +213,7 @@ export function createTiptapDocumentSchema({
           const attrs = node.attrs;
           if (
             !hasOnlyKeys(attrs, ['src', 'alt', 'title', 'width', 'height']) ||
-            !isUploadSrc(attrs.src, uploadOrigin)
+            !parseCanonicalUploadKey(attrs.src, uploadOrigin)
           )
             return false;
           for (const key of ['alt', 'title']) {
