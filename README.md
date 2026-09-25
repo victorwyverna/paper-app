@@ -38,7 +38,7 @@ Write. Publish. Share.
 - [x] Add CI for formatting, linting, type checking, tests, and builds.
 - [ ] Enforce a strict and bounded TipTap document schema.
 - [ ] Make article slug creation race-safe.
-- [ ] Store only edit-token hashes and add recovery UX.
+- [x] Store only edit-token hashes and add recovery UX.
 - [ ] Validate uploaded image content and track upload lifecycle.
 
 ### Definition of Done

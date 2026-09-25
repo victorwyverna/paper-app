@@ -52,11 +52,13 @@
 ### Task 1: Shared Article Title Contract
 
 **Files:**
+
 - Create: `apps/frontend/src/entities/article/model/article-title.ts`
 - Create: `apps/frontend/src/entities/article/model/article-title.test.ts`
 - Modify: `apps/frontend/src/entities/article/index.ts`
 
 **Interfaces:**
+
 - Consumes: `ARTICLE_TITLE_MAX_LENGTH: number` from `@paper-app/types`.
 - Produces: `normalizeArticleTitle(value: string): string` and `validateArticleTitle(value: string): string | undefined`.
 
@@ -65,25 +67,28 @@
 Create `article-title.test.ts` with literal expectations that catch an empty-title branch, a wrong max boundary, and validation against the untrimmed value:
 
 ```ts
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from "vitest";
 
-import { normalizeArticleTitle, validateArticleTitle } from './article-title';
+import { normalizeArticleTitle, validateArticleTitle } from "./article-title";
 
-describe('article title contract', () => {
-  test('normalizes surrounding whitespace before submission', () => {
-    expect(normalizeArticleTitle('  A quiet story  ')).toBe('A quiet story');
+describe("article title contract", () => {
+  test("normalizes surrounding whitespace before submission", () => {
+    expect(normalizeArticleTitle("  A quiet story  ")).toBe("A quiet story");
   });
 
   test.each([
-    { value: 'A'.repeat(200), expected: undefined },
+    { value: "A".repeat(200), expected: undefined },
     {
-      value: ` ${'A'.repeat(201)} `,
-      expected: 'Keep the title under 200 characters.',
+      value: ` ${"A".repeat(201)} `,
+      expected: "Keep the title under 200 characters.",
     },
-    { value: '   ', expected: 'Give your story a title.' },
-  ])('validates the shared title boundary for "$value"', ({ value, expected }) => {
-    expect(validateArticleTitle(value)).toBe(expected);
-  });
+    { value: "   ", expected: "Give your story a title." },
+  ])(
+    'validates the shared title boundary for "$value"',
+    ({ value, expected }) => {
+      expect(validateArticleTitle(value)).toBe(expected);
+    },
+  );
 });
 ```
 
@@ -102,7 +107,7 @@ Expected: FAIL because `./article-title` does not exist.
 Create `article-title.ts`:
 
 ```ts
-import { ARTICLE_TITLE_MAX_LENGTH } from '@paper-app/types';
+import { ARTICLE_TITLE_MAX_LENGTH } from "@paper-app/types";
 
 export function normalizeArticleTitle(value: string): string {
   return value.trim();
@@ -112,7 +117,7 @@ export function validateArticleTitle(value: string): string | undefined {
   const title = normalizeArticleTitle(value);
 
   if (!title) {
-    return 'Give your story a title.';
+    return "Give your story a title.";
   }
 
   if (title.length > ARTICLE_TITLE_MAX_LENGTH) {
@@ -146,11 +151,13 @@ git commit -m "feat: share article title validation"
 ### Task 2: Recovery File Model
 
 **Files:**
+
 - Create: `apps/frontend/src/entities/article/model/recovery-file.ts`
 - Create: `apps/frontend/src/entities/article/model/recovery-file.test.ts`
 - Modify: `apps/frontend/src/entities/article/index.ts`
 
 **Interfaces:**
+
 - Consumes: a server slug, absolute public article URL, and raw edit token supplied only at explicit download time.
 - Produces: `ArticleRecoveryDetails`, `getArticleRecoveryFilename(slug: string): string`, and `createArticleRecoveryText(details: ArticleRecoveryDetails): string`.
 
@@ -159,39 +166,39 @@ git commit -m "feat: share article title validation"
 Create `recovery-file.test.ts`:
 
 ```ts
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from "vitest";
 
 import {
   createArticleRecoveryText,
   getArticleRecoveryFilename,
-} from './recovery-file';
+} from "./recovery-file";
 
-describe('article recovery file', () => {
-  test('contains the public URL, raw token, and loss warning', () => {
+describe("article recovery file", () => {
+  test("contains the public URL, raw token, and loss warning", () => {
     expect(
       createArticleRecoveryText({
-        publicUrl: 'https://paper.test/a-story',
-        editToken: 'secret-owner-token',
-      })
+        publicUrl: "https://paper.test/a-story",
+        editToken: "secret-owner-token",
+      }),
     ).toBe(
       [
-        'Paper edit-access recovery',
-        '',
-        'Keep this file private. Anyone with this token can edit or delete the article.',
-        'Article: https://paper.test/a-story',
-        'Edit token: secret-owner-token',
-        '',
-        'Paper cannot recover a lost edit token.',
-        '',
-      ].join('\n')
+        "Paper edit-access recovery",
+        "",
+        "Keep this file private. Anyone with this token can edit or delete the article.",
+        "Article: https://paper.test/a-story",
+        "Edit token: secret-owner-token",
+        "",
+        "Paper cannot recover a lost edit token.",
+        "",
+      ].join("\n"),
     );
   });
 
-  test('uses only the public slug in the recovery filename', () => {
-    const filename = getArticleRecoveryFilename('a-story');
+  test("uses only the public slug in the recovery filename", () => {
+    const filename = getArticleRecoveryFilename("a-story");
 
-    expect(filename).toBe('paper-a-story-recovery.txt');
-    expect(filename).not.toContain('secret-owner-token');
+    expect(filename).toBe("paper-a-story-recovery.txt");
+    expect(filename).not.toContain("secret-owner-token");
   });
 });
 ```
@@ -225,15 +232,15 @@ export function createArticleRecoveryText({
   editToken,
 }: ArticleRecoveryDetails): string {
   return [
-    'Paper edit-access recovery',
-    '',
-    'Keep this file private. Anyone with this token can edit or delete the article.',
+    "Paper edit-access recovery",
+    "",
+    "Keep this file private. Anyone with this token can edit or delete the article.",
     `Article: ${publicUrl}`,
     `Edit token: ${editToken}`,
-    '',
-    'Paper cannot recover a lost edit token.',
-    '',
-  ].join('\n');
+    "",
+    "Paper cannot recover a lost edit token.",
+    "",
+  ].join("\n");
 }
 ```
 
@@ -259,12 +266,14 @@ git commit -m "feat: define edit token recovery file"
 ### Task 3: Publish Recovery State
 
 **Files:**
+
 - Create: `apps/frontend/src/pages/article-create/ui/article-recovery-state.tsx`
 - Modify: `apps/frontend/src/pages/article-create/ui/article-create-page.tsx`
 - Modify: `apps/frontend/src/pages/article-create/ui/article-create-page.module.css`
 - Modify: `apps/frontend/src/pages/article-create/ui/article-create-page.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `PublishedRecovery { article: Article; editToken: string; storageSucceeded: boolean }`, `createArticleRecoveryText`, `getArticleRecoveryFilename`, and `paths.article`.
 - Produces: a transient recovery screen whose only navigation output is the public article path; clipboard and download side effects occur only on button activation.
 
@@ -274,9 +283,9 @@ Update the existing successful publish tests so their production-breaking condit
 
 ```ts
 expect(
-  await screen.findByRole('heading', { name: 'Your story is published' })
+  await screen.findByRole("heading", { name: "Your story is published" }),
 ).toBeTruthy();
-expect(screen.queryByText('Published article')).toBeNull();
+expect(screen.queryByText("Published article")).toBeNull();
 ```
 
 Update `renderPage` so the article route renders `Published article` plus a location probe based on `useLocation()`; the probe serializes `pathname`, `search`, `hash`, and `state` for the later security assertion.
@@ -286,7 +295,7 @@ Update `renderPage` so the article route renders `Published article` plus a loca
 Add tests that publish a valid draft and assert these literal outcomes:
 
 ```ts
-test('shows browser-local recovery after storing the token and waits for Continue', async () => {
+test("shows browser-local recovery after storing the token and waits for Continue", async () => {
   // POST succeeds with owner-token.
   // Assert localStorage key paper:edit-token:formatted-story equals owner-token.
   // Assert the recovery heading, visible token, public link, Copy, Download, Continue.
@@ -294,9 +303,9 @@ test('shows browser-local recovery after storing the token and waits for Continu
   // Assert Published article is still absent.
 });
 
-test('stays on recovery and explains permanent loss when localStorage throws', async () => {
-  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-    throw new DOMException('Storage blocked');
+test("stays on recovery and explains permanent loss when localStorage throws", async () => {
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+    throw new DOMException("Storage blocked");
   });
   // Publish valid content.
   // Assert role=alert says Paper could not store edit access in this browser.
@@ -305,7 +314,7 @@ test('stays on recovery and explains permanent loss when localStorage throws', a
   // Assert Published article is absent.
 });
 
-test('continues manually without putting the token in the location', async () => {
+test("continues manually without putting the token in the location", async () => {
   // Publish and assert the destination is still absent.
   // Click Continue to article.
   // Assert Published article appears.
@@ -339,7 +348,7 @@ const [publishedRecovery, setPublishedRecovery] =
 // After createArticle resolves:
 const storageSucceeded = saveArticleEditToken(
   published.article.slug,
-  published.editToken
+  published.editToken,
 );
 setPublishedRecovery({ ...published, storageSucceeded });
 ```
@@ -368,18 +377,18 @@ Run the focused page test. Expected: existing publish tests plus new storage cas
 Add a real clipboard boundary double and assert component output, not the spy itself as the sole outcome:
 
 ```ts
-test('copies only the raw token and confirms success', async () => {
+test("copies only the raw token and confirms success", async () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
-  vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+  vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
   // Publish, click Copy token.
-  expect((await screen.findByRole('status')).textContent).toContain(
-    'Edit token copied.'
+  expect((await screen.findByRole("status")).textContent).toContain(
+    "Edit token copied.",
   );
-  expect(writeText).toHaveBeenCalledWith('owner-token');
+  expect(writeText).toHaveBeenCalledWith("owner-token");
 });
 
-test('keeps manual recovery available when clipboard access fails', async () => {
-  const writeText = vi.fn().mockRejectedValue(new DOMException('Denied'));
+test("keeps manual recovery available when clipboard access fails", async () => {
+  const writeText = vi.fn().mockRejectedValue(new DOMException("Denied"));
   // Publish, click Copy token.
   // Assert role=alert, raw token still visible, Download still enabled.
 });
@@ -410,12 +419,11 @@ Run the focused create-page test. Expected: FAIL because Download has no handler
 On Download activation:
 
 ```ts
-const blob = new Blob(
-  [createArticleRecoveryText({ publicUrl, editToken })],
-  { type: 'text/plain;charset=utf-8' }
-);
+const blob = new Blob([createArticleRecoveryText({ publicUrl, editToken })], {
+  type: "text/plain;charset=utf-8",
+});
 const objectUrl = URL.createObjectURL(blob);
-const anchor = document.createElement('a');
+const anchor = document.createElement("a");
 anchor.href = objectUrl;
 anchor.download = getArticleRecoveryFilename(article.slug);
 anchor.click();
@@ -456,11 +464,13 @@ git commit -m "feat: add one-time edit token recovery"
 ### Task 4: Edit Credential Clarity and Unsaved-Changes Protection
 
 **Files:**
+
 - Modify: `apps/frontend/src/pages/article-edit/ui/article-edit-page.tsx`
 - Modify: `apps/frontend/src/pages/article-edit/ui/article-edit-page.module.css`
 - Modify: `apps/frontend/src/pages/article-edit/ui/article-edit-page.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `normalizeArticleTitle`, `validateArticleTitle`, current `Article`, raw local edit token, and React Router's `useBlocker`.
 - Produces: a dirty-state boolean, an in-app discard decision, a browser `beforeunload` guard, and an allowed-departure ref used only after successful save/delete.
 
@@ -534,7 +544,7 @@ const blocker = useBlocker(
   ({ currentLocation, nextLocation }) =>
     isDirty &&
     !allowDepartureRef.current &&
-    currentLocation.pathname !== nextLocation.pathname
+    currentLocation.pathname !== nextLocation.pathname,
 );
 ```
 
@@ -547,7 +557,7 @@ Run the focused edit-page suite. Expected: all in-app navigation tests PASS.
 After changing the title, dispatch a cancelable event and assert it is prevented:
 
 ```ts
-const event = new Event('beforeunload', { cancelable: true });
+const event = new Event("beforeunload", { cancelable: true });
 window.dispatchEvent(event);
 expect(event.defaultPrevented).toBe(true);
 ```
@@ -563,12 +573,12 @@ useEffect(() => {
   const handleBeforeUnload = (event: BeforeUnloadEvent) => {
     if (isDirty && !allowDepartureRef.current) {
       event.preventDefault();
-      event.returnValue = '';
+      event.returnValue = "";
     }
   };
 
-  window.addEventListener('beforeunload', handleBeforeUnload);
-  return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  window.addEventListener("beforeunload", handleBeforeUnload);
+  return () => window.removeEventListener("beforeunload", handleBeforeUnload);
 }, [isDirty]);
 ```
 
@@ -598,11 +608,13 @@ git commit -m "feat: protect unsaved article edits"
 ### Task 5: Documentation, Independent Review, and Acceptance Gate
 
 **Files:**
+
 - Modify: `apps/frontend/README.md`
 - Modify: `README.md`
 - Modify if review finds defects: only Phase 5 files named above and their tests.
 
 **Interfaces:**
+
 - Consumes: completed Phase 5 behavior and the Definition of Done in `docs/design/quality-hardening.md`.
 - Produces: accurate user-facing documentation, an independent whole-change review record in the final report, and one full verified acceptance result.
 
