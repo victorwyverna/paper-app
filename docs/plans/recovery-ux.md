@@ -8,7 +8,7 @@
 
 **Tech Stack:** React 19, TypeScript, React Router 8 data routers, TanStack Form, TanStack Query, Vitest, Testing Library, CSS Modules, pnpm/Turbo.
 
-**Spec:** `docs/superpowers/specs/2026-09-25-recovery-ux-design.md`
+**Spec:** `docs/design/recovery-ux.md`
 
 ## Global Constraints
 
@@ -635,7 +635,7 @@ In root `README.md`, change only `Store only edit-token hashes and add recovery 
 Run:
 
 ```bash
-pnpm exec prettier --check README.md apps/frontend/README.md docs/superpowers/specs/2026-09-25-recovery-ux-design.md docs/superpowers/plans/2026-09-25-recovery-ux.md
+pnpm exec prettier --check README.md apps/frontend/README.md docs/design/recovery-ux.md docs/plans/recovery-ux.md
 git diff --check
 ```
 

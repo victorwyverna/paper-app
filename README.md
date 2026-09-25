@@ -36,8 +36,8 @@ Write. Publish. Share.
 
 - [x] Make workspace quality commands fail when application tasks are missing.
 - [x] Add CI for formatting, linting, type checking, tests, and builds.
-- [ ] Enforce a strict and bounded TipTap document schema.
-- [ ] Make article slug creation race-safe.
+- [x] Enforce a strict and bounded TipTap document schema.
+- [x] Make article slug creation race-safe.
 - [x] Store only edit-token hashes and add recovery UX.
 - [ ] Validate uploaded image content and track upload lifecycle.
 
