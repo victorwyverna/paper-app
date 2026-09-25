@@ -1,15 +1,17 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ARTICLE_TITLE_MAX_LENGTH } from '@paper-app/types';
-import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useBlocker, useNavigate, useParams } from 'react-router';
 
 import { paths } from '@/app/router/lib/paths';
 import {
   deleteArticle,
   getArticle,
   getArticleEditToken,
+  normalizeArticleTitle,
   removeArticleEditToken,
   updateArticle,
+  validateArticleTitle,
   type Article,
   type TiptapDocument,
 } from '@/entities/article';
@@ -58,6 +60,36 @@ function EditorForm({
   const [bodyDocument, setBodyDocument] = useState<TiptapDocument>(
     article.content
   );
+  const allowDepartureRef = useRef(false);
+  const draftRevisionRef = useRef(0);
+  const discardHeadingRef = useRef<HTMLHeadingElement>(null);
+  const isDirty =
+    title !== article.title ||
+    JSON.stringify(bodyDocument) !== JSON.stringify(article.content);
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      isDirty &&
+      !allowDepartureRef.current &&
+      currentLocation.pathname !== nextLocation.pathname
+  );
+
+  useEffect(() => {
+    if (blocker.state === 'blocked') {
+      discardHeadingRef.current?.focus();
+    }
+  }, [blocker.state]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (isDirty && !allowDepartureRef.current) {
+        event.preventDefault();
+        event.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
 
   return (
     <section className={styles.page}>
@@ -93,22 +125,17 @@ function EditorForm({
         id="article-edit-form"
         onSubmit={async (event) => {
           event.preventDefault();
-          const normalizedTitle = title.trim();
+          const normalizedTitle = normalizeArticleTitle(title);
+          const validationError = validateArticleTitle(title);
 
-          if (!normalizedTitle) {
-            setTitleError('Give your story a title.');
-            return;
-          }
-
-          if (normalizedTitle.length > ARTICLE_TITLE_MAX_LENGTH) {
-            setTitleError(
-              `Keep the title under ${ARTICLE_TITLE_MAX_LENGTH} characters.`
-            );
+          if (validationError) {
+            setTitleError(validationError);
             return;
           }
 
           setSaveError(null);
           setIsSaving(true);
+          const submittedRevision = draftRevisionRef.current;
 
           try {
             const updatedArticle = await updateArticle(
@@ -120,7 +147,10 @@ function EditorForm({
               }
             );
             queryClient.setQueryData(['article', article.slug], updatedArticle);
-            navigate(paths.article(article.slug), { replace: true });
+            if (draftRevisionRef.current === submittedRevision) {
+              allowDepartureRef.current = true;
+              navigate(paths.article(article.slug), { replace: true });
+            }
           } catch (error) {
             setSaveError(
               getActionError(
@@ -146,6 +176,7 @@ function EditorForm({
               id="title"
               maxLength={ARTICLE_TITLE_MAX_LENGTH}
               onChange={(event) => {
+                draftRevisionRef.current += 1;
                 setTitle(event.target.value);
                 setTitleError(null);
               }}
@@ -182,7 +213,10 @@ function EditorForm({
               id="body"
               invalid={false}
               onBlur={() => undefined}
-              onChange={(document) => setBodyDocument(document)}
+              onChange={(document) => {
+                draftRevisionRef.current += 1;
+                setBodyDocument(document);
+              }}
               value={bodyDocument}
             />
             <p className={styles.fieldError} id="body-error" />
@@ -221,6 +255,7 @@ function EditorForm({
                       queryClient.removeQueries({
                         queryKey: ['article', article.slug],
                       });
+                      allowDepartureRef.current = true;
                       navigate(paths.createArticle, { replace: true });
                     } catch (error) {
                       setDeleteError(
@@ -263,13 +298,43 @@ function EditorForm({
           )}
         </footer>
       </form>
+
+      {blocker.state === 'blocked' ? (
+        <aside
+          aria-labelledby="discard-changes-title"
+          className={styles.discardConfirmation}
+        >
+          <h2 id="discard-changes-title" ref={discardHeadingRef} tabIndex={-1}>
+            Discard unsaved changes?
+          </h2>
+          <p>Your unpublished title and article changes will be lost.</p>
+          <div className={styles.discardActions}>
+            <button
+              className={styles.cancelButton}
+              onClick={() => blocker.reset()}
+              type="button"
+            >
+              Stay and keep editing
+            </button>
+            <button
+              className={styles.deleteButton}
+              onClick={() => {
+                allowDepartureRef.current = true;
+                blocker.proceed();
+              }}
+              type="button"
+            >
+              Discard changes
+            </button>
+          </div>
+        </aside>
+      ) : null}
     </section>
   );
 }
 
-export function ArticleEditPage() {
-  const { slug = '' } = useParams<{ slug: string }>();
-  const editToken = getArticleEditToken(slug);
+function ArticleEditPageForSlug({ slug }: { slug: string }) {
+  const [editToken] = useState(() => getArticleEditToken(slug));
   const articleQuery = useQuery({
     queryKey: ['article', slug],
     queryFn: ({ signal }) => getArticle(slug, signal),
@@ -282,7 +347,8 @@ export function ArticleEditPage() {
         <p className={styles.eyebrow}>Protected article</p>
         <h1 className={styles.stateTitle}>Edit access unavailable</h1>
         <p className={styles.stateDescription}>
-          This browser does not have the token required to edit this article.
+          This browser does not have a saved edit token for this article. Paper
+          cannot recover a lost token.
         </p>
         <Link className={styles.stateLink} to={paths.article(slug)}>
           Back to article
@@ -300,7 +366,7 @@ export function ArticleEditPage() {
     );
   }
 
-  if (articleQuery.isError) {
+  if (articleQuery.isError && !articleQuery.data) {
     return (
       <section className={styles.statePage}>
         <p className={styles.eyebrow}>Connection interrupted</p>
@@ -320,4 +386,10 @@ export function ArticleEditPage() {
   }
 
   return <EditorForm article={articleQuery.data} editToken={editToken} />;
+}
+
+export function ArticleEditPage() {
+  const { slug = '' } = useParams<{ slug: string }>();
+
+  return <ArticleEditPageForSlug key={slug} slug={slug} />;
 }

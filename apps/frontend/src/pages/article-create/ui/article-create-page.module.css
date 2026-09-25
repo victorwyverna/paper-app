@@ -177,6 +177,140 @@
   text-align: right;
 }
 
+.recoveryPage {
+  margin-inline: auto;
+  max-width: 46rem;
+  padding-block: clamp(1rem, 6vw, 4rem);
+}
+
+.recoveryTitle {
+  font-family: var(--font-serif);
+  font-size: clamp(3rem, 9vw, 5.8rem);
+  letter-spacing: -0.055em;
+  line-height: 0.95;
+  margin: 0;
+}
+
+.recoveryIntro {
+  color: var(--color-text-muted);
+  font-size: 1.1rem;
+  line-height: 1.6;
+  margin: 1.4rem 0 2rem;
+}
+
+.recoveryDetails {
+  background: rgb(255 255 255 / 72%);
+  border: 1px solid var(--color-border);
+  border-radius: 0.55rem;
+  box-shadow: 0 1.5rem 4rem rgb(48 43 35 / 7%);
+  margin: 0;
+  padding: clamp(1.25rem, 4vw, 2rem);
+}
+
+.recoveryDetails > div + div {
+  border-top: 1px solid var(--color-border);
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+}
+
+.recoveryDetails dt {
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  margin-bottom: 0.4rem;
+  text-transform: uppercase;
+}
+
+.recoveryDetails dd {
+  margin: 0;
+}
+
+.recoveryDetails a {
+  color: var(--color-accent);
+  overflow-wrap: anywhere;
+}
+
+.recoveryToken {
+  color: var(--color-text);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.recoveryNotice,
+.recoveryWarning {
+  border-radius: 0.45rem;
+  line-height: 1.55;
+  margin: 1.25rem 0 0;
+  padding: 1rem 1.1rem;
+}
+
+.recoveryNotice {
+  background: #f3f0e8;
+  color: var(--color-text-muted);
+}
+
+.recoveryWarning {
+  background: #fff1ee;
+  border: 1px solid #e5b8b1;
+  color: #80534e;
+  font-weight: 650;
+}
+
+.recoveryActions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.secondaryButton,
+.continueButton {
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 700;
+  min-height: 2.75rem;
+  padding: 0.7rem 1rem;
+}
+
+.secondaryButton {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+.continueButton {
+  background: var(--color-text);
+  border: 1px solid var(--color-text);
+  color: var(--color-background);
+  margin-left: auto;
+}
+
+.secondaryButton:focus-visible,
+.continueButton:focus-visible,
+.recoveryDetails a:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
+  outline-offset: 3px;
+}
+
+.recoveryActionStatus,
+.recoveryActionError {
+  font-size: 0.8rem;
+  font-weight: 650;
+  margin: 0.8rem 0 0;
+}
+
+.recoveryActionStatus {
+  color: var(--color-accent);
+}
+
+.recoveryActionError {
+  color: #a33c32;
+}
+
 .srOnly {
   height: 1px;
   margin: -1px;
@@ -216,6 +350,15 @@
   .publishError {
     margin-top: 0.75rem;
     text-align: left;
+  }
+
+  .recoveryActions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .continueButton {
+    margin-left: 0;
   }
 }
 

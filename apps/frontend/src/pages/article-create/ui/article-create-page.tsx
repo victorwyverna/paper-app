@@ -1,18 +1,22 @@
 import { useForm } from '@tanstack/react-form';
 import { ARTICLE_TITLE_MAX_LENGTH } from '@paper-app/types';
 import { useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
 
-import { paths } from '@/app/router/lib/paths';
 import {
   createArticle,
+  normalizeArticleTitle,
   saveArticleEditToken,
+  validateArticleTitle,
   type TiptapDocument,
 } from '@/entities/article';
 import { RichTextEditor } from '@/features/article-editor';
 import { ApiError } from '@/shared/api';
 
 import styles from './article-create-page.module.css';
+import {
+  ArticleRecoveryState,
+  type PublishedRecovery,
+} from './article-recovery-state';
 
 function getFieldError(errors: readonly unknown[]): string {
   const error = errors[0];
@@ -43,9 +47,10 @@ function getPublishError(error: unknown): string {
 }
 
 export function ArticleCreatePage() {
-  const navigate = useNavigate();
   const bodyDocument = useRef<TiptapDocument>(EMPTY_DOCUMENT);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [publishedRecovery, setPublishedRecovery] =
+    useState<PublishedRecovery | null>(null);
 
   const form = useForm({
     defaultValues: {
@@ -57,20 +62,27 @@ export function ArticleCreatePage() {
 
       try {
         const published = await createArticle({
-          title: value.title.trim(),
+          title: normalizeArticleTitle(value.title),
           content: bodyDocument.current,
         });
 
-        saveArticleEditToken(published.article.slug, published.editToken);
-        navigate(paths.article(published.article.slug), {
-          replace: true,
-          state: { justPublished: true },
+        const storageSucceeded = saveArticleEditToken(
+          published.article.slug,
+          published.editToken
+        );
+        setPublishedRecovery({
+          ...published,
+          storageSucceeded,
         });
       } catch (error) {
         setPublishError(getPublishError(error));
       }
     },
   });
+
+  if (publishedRecovery) {
+    return <ArticleRecoveryState {...publishedRecovery} />;
+  }
 
   return (
     <section className={styles.page}>
@@ -126,14 +138,9 @@ export function ArticleCreatePage() {
           <form.Field
             name="title"
             validators={{
-              onChange: ({ value }) =>
-                value.length > ARTICLE_TITLE_MAX_LENGTH
-                  ? `Keep the title under ${ARTICLE_TITLE_MAX_LENGTH} characters.`
-                  : undefined,
-              onBlur: ({ value }) =>
-                value.trim() ? undefined : 'Give your story a title.',
-              onSubmit: ({ value }) =>
-                value.trim() ? undefined : 'Give your story a title.',
+              onChange: ({ value }) => validateArticleTitle(value),
+              onBlur: ({ value }) => validateArticleTitle(value),
+              onSubmit: ({ value }) => validateArticleTitle(value),
             }}
           >
             {(field) => (
