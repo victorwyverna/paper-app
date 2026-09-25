@@ -2,19 +2,63 @@ import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  DeleteObjectCommand,
+  ListObjectsV2Command,
+  S3Client,
+} from '@aws-sdk/client-s3';
 
 import { createApp } from './app.js';
 import { prisma } from './db/prisma.js';
 import { hashEditToken } from './services/edit-token.js';
 import { ensureBucket, getFile } from './storage/s3.js';
 import { cleanupResources } from './test-utils/cleanup.js';
+import {
+  gifFixture,
+  jpegFixture,
+  oversizedWebpFixture,
+  pngFixture,
+  truncatedFixture,
+  webpFixture,
+} from './test-utils/image-fixtures.js';
 
 const server = createApp();
 let baseUrl = '';
 type CreatedArticle = { slug: string; editToken: string };
 const createdArticles: CreatedArticle[] = [];
 const uploadedKeys: string[] = [];
+
+function createS3Client(): S3Client {
+  return new S3Client({
+    endpoint: process.env.S3_ENDPOINT!,
+    region: 'us-east-1',
+    forcePathStyle: true,
+    credentials: {
+      accessKeyId: process.env.S3_ACCESS_KEY!,
+      secretAccessKey: process.env.S3_SECRET_KEY!,
+    },
+  });
+}
+
+async function listObjectKeys(): Promise<string[]> {
+  const s3 = createS3Client();
+  try {
+    const result = await s3.send(
+      new ListObjectsV2Command({ Bucket: process.env.S3_BUCKET! })
+    );
+    return (result.Contents ?? [])
+      .flatMap(({ Key }) => (Key ? [Key] : []))
+      .sort();
+  } finally {
+    s3.destroy();
+  }
+}
+
+function requestBody(bytes: Buffer): Uint8Array<ArrayBuffer> {
+  const body = new Uint8Array(bytes.byteLength);
+  body.set(bytes);
+  return body;
+}
 
 async function postArticle(input: unknown): Promise<Response> {
   const response = await fetch(`${baseUrl}/articles`, {
@@ -88,15 +132,7 @@ before(async () => {
 
 after(async () => {
   try {
-    const s3 = new S3Client({
-      endpoint: process.env.S3_ENDPOINT!,
-      region: 'us-east-1',
-      forcePathStyle: true,
-      credentials: {
-        accessKeyId: process.env.S3_ACCESS_KEY!,
-        secretAccessKey: process.env.S3_SECRET_KEY!,
-      },
-    });
+    const s3 = createS3Client();
     try {
       await cleanupResources([
         ...createdArticles.map(
@@ -111,6 +147,17 @@ after(async () => {
           );
           assert.equal(await getFile(key), null);
         }),
+        async () => {
+          await prisma.upload.deleteMany({
+            where: { objectKey: { in: uploadedKeys } },
+          });
+          assert.equal(
+            await prisma.upload.count({
+              where: { objectKey: { in: uploadedKeys } },
+            }),
+            0
+          );
+        },
         async () => {
           assert.equal(
             await prisma.article.count({
@@ -682,60 +729,128 @@ test('returns 403 when deleting with an invalid edit token', async () => {
   assert.equal(body.message, 'Invalid edit token');
 });
 
-test('uploads and returns an image', async () => {
-  const image = Buffer.from('test image content');
+for (const { name, contentType, extension, fixture } of [
+  {
+    name: 'JPEG',
+    contentType: 'image/jpeg',
+    extension: 'jpg',
+    fixture: jpegFixture,
+  },
+  {
+    name: 'PNG',
+    contentType: 'image/png',
+    extension: 'png',
+    fixture: pngFixture,
+  },
+  {
+    name: 'WebP',
+    contentType: 'image/webp',
+    extension: 'webp',
+    fixture: webpFixture,
+  },
+  {
+    name: 'GIF',
+    contentType: 'image/gif',
+    extension: 'gif',
+    fixture: gifFixture,
+  },
+] as const) {
+  test(`tracks, stores, and returns a decoded ${name} image`, async () => {
+    const image = fixture();
+    const uploadResponse = await fetch(`${baseUrl}/uploads`, {
+      method: 'POST',
+      headers: { 'Content-Type': contentType },
+      body: requestBody(image),
+    });
 
-  const uploadResponse = await fetch(`${baseUrl}/uploads`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'image/png',
-    },
-    body: image,
+    assert.equal(uploadResponse.status, 201);
+    const uploaded = (await uploadResponse.json()) as {
+      key: string;
+      url: string;
+    };
+    uploadedKeys.push(uploaded.key);
+
+    assert.match(uploaded.key, new RegExp(`^[a-f0-9-]+\\.${extension}$`));
+    assert.equal(
+      uploaded.url,
+      `${process.env.PUBLIC_API_URL}/uploads/${uploaded.key}`
+    );
+    const row = await prisma.upload.findUniqueOrThrow({
+      where: { objectKey: uploaded.key },
+    });
+    assert.equal(row.detectedContentType, contentType);
+    assert.equal(row.byteSize, image.byteLength);
+    assert.equal(row.attachedAt, null);
+
+    const getResponse = await fetch(`${baseUrl}/uploads/${uploaded.key}`);
+    assert.equal(getResponse.status, 200);
+    assert.equal(getResponse.headers.get('content-type'), contentType);
+    assert.deepEqual(Buffer.from(await getResponse.arrayBuffer()), image);
   });
+}
 
-  assert.equal(uploadResponse.status, 201);
-
-  const uploaded = (await uploadResponse.json()) as {
-    key: string;
-    url: string;
+async function assertRejectedUploadDoesNotWrite(input: {
+  contentType?: string;
+  body: Buffer;
+}): Promise<Response> {
+  const rowsBefore = await prisma.upload.count();
+  const objectsBefore = await listObjectKeys();
+  const request: RequestInit = {
+    method: 'POST',
+    body: requestBody(input.body),
   };
-  uploadedKeys.push(uploaded.key);
+  if (input.contentType) {
+    request.headers = { 'Content-Type': input.contentType };
+  }
+  const response = await fetch(`${baseUrl}/uploads`, request);
+  assert.equal(response.status, 415);
+  assert.equal(await prisma.upload.count(), rowsBefore);
+  assert.deepEqual(await listObjectKeys(), objectsBefore);
+  return response;
+}
 
-  assert.match(uploaded.key, /^[a-f0-9-]+\.png$/);
-  assert.equal(
-    uploaded.url,
-    `${process.env.PUBLIC_API_URL}/uploads/${uploaded.key}`
-  );
-
-  const getResponse = await fetch(`${baseUrl}/uploads/${uploaded.key}`);
-
-  assert.equal(getResponse.status, 200);
-  assert.equal(getResponse.headers.get('content-type'), 'image/png');
-
-  const returnedImage = Buffer.from(await getResponse.arrayBuffer());
-
-  assert.deepEqual(returnedImage, image);
+test('rejects missing and unsupported claimed image types before writes', async () => {
+  for (const contentType of [undefined, 'text/plain', 'image/svg+xml']) {
+    const response = await assertRejectedUploadDoesNotWrite({
+      ...(contentType ? { contentType } : {}),
+      body: pngFixture(),
+    });
+    assert.deepEqual(await response.json(), {
+      message: 'Only JPEG, PNG, WebP, and GIF images are allowed',
+    });
+  }
 });
 
-test('rejects an unsupported image content type', async () => {
+test('rejects invalid, truncated, and mismatched images before writes', async () => {
+  for (const input of [
+    { contentType: 'image/png', body: Buffer.from('not an image') },
+    { contentType: 'image/png', body: truncatedFixture(pngFixture()) },
+    { contentType: 'image/jpeg', body: pngFixture() },
+  ]) {
+    const response = await assertRejectedUploadDoesNotWrite(input);
+    assert.equal(response.status, 415);
+  }
+});
+
+test('rejects an empty image body', async () => {
   const response = await fetch(`${baseUrl}/uploads`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'text/plain',
-    },
-    body: 'not an image',
+    headers: { 'Content-Type': 'image/png' },
+    body: requestBody(Buffer.alloc(0)),
   });
+  assert.equal(response.status, 400);
+});
 
-  assert.equal(response.status, 415);
-
-  const body = (await response.json()) as {
-    message: string;
-  };
-
-  assert.equal(
-    body.message,
-    'Only JPEG, PNG, WebP, and GIF images are allowed'
-  );
+test('rejects an image above the decoded pixel limit', async () => {
+  const response = await fetch(`${baseUrl}/uploads`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'image/webp' },
+    body: requestBody(oversizedWebpFixture()),
+  });
+  assert.equal(response.status, 413);
+  assert.deepEqual(await response.json(), {
+    message: 'Image dimensions are too large',
+  });
 });
 
 test('rejects an image larger than 5 MiB', async () => {
@@ -744,7 +859,7 @@ test('rejects an image larger than 5 MiB', async () => {
     headers: {
       'Content-Type': 'image/png',
     },
-    body: Buffer.alloc(5 * 1024 * 1024 + 1),
+    body: requestBody(Buffer.alloc(5 * 1024 * 1024 + 1)),
   });
 
   assert.equal(response.status, 413);
@@ -754,6 +869,26 @@ test('rejects an image larger than 5 MiB', async () => {
   };
 
   assert.equal(body.message, 'Image is too large');
+});
+
+test('returns 404 for an untracked object key', async () => {
+  const response = await fetch(`${baseUrl}/uploads/${randomUUID()}.png`);
+  assert.equal(response.status, 404);
+});
+
+test('returns 404 when a tracked upload object is missing', async () => {
+  const key = `${randomUUID()}.png`;
+  uploadedKeys.push(key);
+  await prisma.upload.create({
+    data: {
+      objectKey: key,
+      detectedContentType: 'image/png',
+      byteSize: pngFixture().byteLength,
+    },
+  });
+
+  const response = await fetch(`${baseUrl}/uploads/${key}`);
+  assert.equal(response.status, 404);
 });
 
 const doc = (...content: unknown[]) => ({ type: 'doc', content });

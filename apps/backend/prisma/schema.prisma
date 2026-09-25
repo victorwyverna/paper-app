@@ -16,3 +16,13 @@ model Article {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
+
+model Upload {
+  objectKey           String   @id
+  detectedContentType String
+  byteSize            Int
+  createdAt           DateTime @default(now())
+  attachedAt          DateTime?
+
+  @@index([attachedAt, createdAt])
+}

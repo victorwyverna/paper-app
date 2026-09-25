@@ -72,7 +72,9 @@ export async function getFile(key: string) {
   } catch (error) {
     if (
       error instanceof S3ServiceException &&
-      error.$metadata.httpStatusCode === 404
+      (error.$metadata.httpStatusCode === 404 ||
+        error.name === 'NoSuchKey' ||
+        error.name === 'NotFound')
     ) {
       return null;
     }

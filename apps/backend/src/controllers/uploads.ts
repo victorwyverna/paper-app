@@ -1,30 +1,24 @@
-import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { buildPublicUploadUrl } from '../config/public-api.js';
 
 import { PayloadTooLargeError, readImageBody, sendJson } from '../lib/http.js';
-import { getFile, uploadFile } from '../storage/s3.js';
-
-const imageExtensions = new Map([
-  ['image/jpeg', 'jpg'],
-  ['image/png', 'png'],
-  ['image/webp', 'webp'],
-  ['image/gif', 'gif'],
-]);
+import {
+  ImageDimensionsTooLargeError,
+  parseClaimedImageContentType,
+  UnsupportedImageError,
+} from '../services/image-validation.js';
+import { createUpload, getUpload } from '../services/upload-service.js';
 
 export async function uploadImageController(
   request: IncomingMessage,
   response: ServerResponse
 ): Promise<void> {
   const contentTypeHeader = request.headers['content-type'];
-  const contentType =
+  const claimedContentType =
     typeof contentTypeHeader === 'string'
-      ? contentTypeHeader.split(';')[0]
-      : undefined;
+      ? parseClaimedImageContentType(contentTypeHeader)
+      : null;
 
-  const extension = contentType ? imageExtensions.get(contentType) : undefined;
-
-  if (!contentType || !extension) {
+  if (!claimedContentType) {
     sendJson(response, 415, {
       message: 'Only JPEG, PNG, WebP, and GIF images are allowed',
     });
@@ -45,18 +39,30 @@ export async function uploadImageController(
     return;
   }
 
-  const key = `${randomUUID()}.${extension}`;
+  try {
+    sendJson(response, 201, await createUpload(image, claimedContentType));
+  } catch (error) {
+    if (error instanceof UnsupportedImageError) {
+      sendJson(response, 415, {
+        message: 'Only JPEG, PNG, WebP, and GIF images are allowed',
+      });
+      return;
+    }
 
-  await uploadFile(key, image, contentType);
+    if (error instanceof ImageDimensionsTooLargeError) {
+      sendJson(response, 413, { message: error.message });
+      return;
+    }
 
-  sendJson(response, 201, { key, url: buildPublicUploadUrl(key) });
+    throw error;
+  }
 }
 
 export async function getImageController(
   response: ServerResponse,
   key: string
 ): Promise<void> {
-  const file = await getFile(key);
+  const file = await getUpload(key);
 
   if (!file) {
     sendJson(response, 404, { message: 'Image not found' });
