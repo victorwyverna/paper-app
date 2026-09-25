@@ -7,10 +7,13 @@ import {
   ListObjectsV2Command,
   S3Client,
 } from '@aws-sdk/client-s3';
+import type { TiptapDocument } from '@paper-app/types';
 
 import { createApp } from './app.js';
 import { prisma } from './db/prisma.js';
+import { persistWithArticleUploads } from './services/article-uploads.js';
 import { hashEditToken } from './services/edit-token.js';
+import { cleanupStaleUploads } from './services/upload-cleanup.js';
 import { ensureBucket, getFile } from './storage/s3.js';
 import { cleanupResources } from './test-utils/cleanup.js';
 import {
@@ -64,6 +67,7 @@ async function seedTrackedUpload(
   options: {
     key?: string;
     attachedAt?: Date;
+    createdAt?: Date;
   } = {}
 ): Promise<{ key: string; src: string }> {
   const key = options.key ?? `${randomUUID()}.png`;
@@ -74,6 +78,7 @@ async function seedTrackedUpload(
       detectedContentType: 'image/png',
       byteSize: pngFixture().byteLength,
       ...(options.attachedAt ? { attachedAt: options.attachedAt } : {}),
+      ...(options.createdAt ? { createdAt: options.createdAt } : {}),
     },
   });
   return { key, src: `${process.env.PUBLIC_API_URL}/uploads/${key}` };
@@ -1065,6 +1070,82 @@ test('concurrent article creates retain slug retries with tracked uploads', asyn
     responses.map(({ status }) => status),
     [201, 201, 201, 201]
   );
+  assert.ok(
+    (
+      await prisma.upload.findUniqueOrThrow({
+        where: { objectKey: upload.key },
+      })
+    ).attachedAt
+  );
+});
+
+test('cleanup race rolls back an article write when cleanup locks first', async () => {
+  const now = new Date('2026-09-26T12:00:00.000Z');
+  const upload = await seedTrackedUpload({
+    createdAt: new Date(now.getTime() - 24 * 60 * 60 * 1000),
+  });
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let entered!: () => void;
+  const didEnter = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const cleanup = cleanupStaleUploads({
+    now,
+    batchSize: 100,
+    deleteFile: async () => {
+      entered();
+      await released;
+    },
+  });
+  await didEnter;
+  const article = postArticle({
+    title: `Cleanup wins ${randomUUID()}`,
+    content: doc(imageNode(upload.src)),
+  });
+  release();
+
+  assert.equal((await cleanup).deleted, 1);
+  assert.equal((await article).status, 400);
+});
+
+test('cleanup race skips an upload when article attachment locks first', async () => {
+  const now = new Date('2026-09-26T12:00:00.000Z');
+  const upload = await seedTrackedUpload({
+    createdAt: new Date(now.getTime() - 24 * 60 * 60 * 1000),
+  });
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let entered!: () => void;
+  const didEnter = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const attachment = prisma.$transaction((tx) =>
+    persistWithArticleUploads(
+      tx,
+      doc(imageNode(upload.src)) as TiptapDocument,
+      async () => {
+        entered();
+        await released;
+      }
+    )
+  );
+  await didEnter;
+  const cleanup = await cleanupStaleUploads({
+    now,
+    batchSize: 100,
+    deleteFile: async () => {
+      throw new Error('attached upload must not be deleted');
+    },
+  });
+  release();
+  await attachment;
+
+  assert.equal(cleanup.skipped, 1);
   assert.ok(
     (
       await prisma.upload.findUniqueOrThrow({
