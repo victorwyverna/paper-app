@@ -11,9 +11,11 @@ import {
 import {
   animatedGifFixture,
   animatedWebpFixture,
+  corruptedLaterFrameAnimatedGifFixture,
   corruptedFixture,
   gifFixture,
   jpegFixture,
+  oversizedAnimatedWebpFixture,
   oversizedWebpFixture,
   pngFixture,
   truncatedFixture,
@@ -120,9 +122,23 @@ for (const [name, contentType, fixture] of [
   });
 }
 
+test('image validation rejects corruption isolated to a later animated frame', async () => {
+  await assert.rejects(
+    inspectImage(corruptedLaterFrameAnimatedGifFixture(), 'image/gif'),
+    UnsupportedImageError
+  );
+});
+
 test('image validation rejects more than 40 million decoded pixels', async () => {
   await assert.rejects(
     inspectImage(oversizedWebpFixture(), 'image/webp'),
+    ImageDimensionsTooLargeError
+  );
+});
+
+test('image validation sums decoded pixels across animated frames', async () => {
+  await assert.rejects(
+    inspectImage(oversizedAnimatedWebpFixture(), 'image/webp'),
     ImageDimensionsTooLargeError
   );
 });

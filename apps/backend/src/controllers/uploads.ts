@@ -12,10 +12,10 @@ export async function uploadImageController(
   request: IncomingMessage,
   response: ServerResponse
 ): Promise<void> {
-  const contentTypeHeader = request.headers['content-type'];
+  const contentTypeHeaders = request.headersDistinct['content-type'];
   const claimedContentType =
-    typeof contentTypeHeader === 'string'
-      ? parseClaimedImageContentType(contentTypeHeader)
+    contentTypeHeaders?.length === 1
+      ? parseClaimedImageContentType(contentTypeHeaders[0])
       : null;
 
   if (!claimedContentType) {

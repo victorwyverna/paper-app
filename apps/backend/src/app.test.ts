@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
+import { request as httpRequest } from 'node:http';
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -843,6 +844,50 @@ test('rejects missing and unsupported claimed image types before writes', async 
       message: 'Only JPEG, PNG, WebP, and GIF images are allowed',
     });
   }
+});
+
+test('rejects repeated physical Content-Type headers before writes', async () => {
+  const rowsBefore = await prisma.upload.count();
+  const objectsBefore = await listObjectKeys();
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const image = pngFixture();
+  const result = await new Promise<{ statusCode: number; body: string }>(
+    (resolve, reject) => {
+      const request = httpRequest(
+        {
+          hostname: '127.0.0.1',
+          port: address.port,
+          path: '/uploads',
+          method: 'POST',
+          headers: {
+            'Content-Type': ['image/png', 'image/jpeg'],
+            'Content-Length': image.byteLength,
+          },
+        },
+        (response) => {
+          const chunks: Buffer[] = [];
+          response.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+          response.on('end', () =>
+            resolve({
+              statusCode: response.statusCode ?? 0,
+              body: Buffer.concat(chunks).toString('utf8'),
+            })
+          );
+        }
+      );
+      request.on('error', reject);
+      request.end(image);
+    }
+  );
+
+  if (result.statusCode === 201) {
+    uploadedKeys.push((JSON.parse(result.body) as { key: string }).key);
+  }
+
+  assert.equal(result.statusCode, 415);
+  assert.equal(await prisma.upload.count(), rowsBefore);
+  assert.deepEqual(await listObjectKeys(), objectsBefore);
 });
 
 test('rejects invalid, truncated, and mismatched images before writes', async () => {
