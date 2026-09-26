@@ -1,95 +1,120 @@
-# Backend
+# Paper Backend
 
-API for the Paper service.
+The Paper HTTP API handles articles, edit-token authorization, image uploads,
+and persistence. For workspace-wide setup and commands, see the
+[project README](../../README.md).
 
 ## Stack
 
-- Node.js and TypeScript;
-- build-in HTTP-server Node.js;
-- Prisma and PostgreSQL;
-- AWS SDK for MinIO / S3;
-- Zod for incoming data validation.
+- The built-in Node.js HTTP server and TypeScript.
+- Prisma with PostgreSQL.
+- AWS SDK for JavaScript with MinIO or compatible S3 storage.
+- Zod for request validation.
+- Sharp for decoded image validation.
 
 ## Structure
 
 ```text
 apps/backend/
-├── src/
-│   ├── app.ts                 # HTTP application: CORS and error handling
-│   ├── server.ts              # application entry point and port binding
-│   ├── controllers/
-│   │   ├── articles.ts        # HTTP handlers for article endpoints
-│   │   └── uploads.ts         # HTTP handlers for image uploads
-│   ├── db/
-│   │   └── prisma.ts          # Prisma connection to PostgreSQL
-│   ├── generated/             # generated Prisma Client (do not edit manually)
-│   ├── lib/
-│   │   └── http.ts            # JSON request and response helpers
-│   ├── openapi.ts             # OpenAPI specification and Swagger UI
-│   ├── routes/
-│   │   └── index.ts           # method and URL routing
-│   ├── schemas/
-│   │   └── article.ts         # Zod schemas for article input
-│   ├── services/
-│   │   └── article-service.ts # article persistence and unique slug creation
-│   └── storage/
-│       └── s3.ts              # MinIO / S3 client and file operations
 ├── prisma/
-│   ├── migrations/            # database migrations
-│   └── schema.prisma          # Prisma data model
+│   ├── migrations/             # database migrations
+│   └── schema.prisma           # Prisma data model
 ├── scripts/
 │   └── generate-postman-collection.mjs
-└── postman/
-    └── paper-api.postman_collection.json
+├── postman/
+│   └── paper-api.postman_collection.json
+└── src/
+    ├── app.ts                  # HTTP server, CORS, and safe error handling
+    ├── server.ts               # application entry point and port binding
+    ├── cli/                    # operational command entry points
+    ├── config/                 # validated application configuration
+    ├── controllers/            # article and upload HTTP handlers
+    ├── db/                     # Prisma connection
+    ├── generated/              # generated Prisma Client; do not edit
+    ├── lib/                    # HTTP and upload-key helpers
+    ├── routes/                 # method and URL routing
+    ├── schemas/                # article and TipTap validation
+    ├── services/               # article, token, upload, and cleanup logic
+    ├── storage/                # S3-compatible object operations
+    ├── test-utils/             # integration-test fixtures and cleanup
+    └── openapi.ts              # OpenAPI contract and Swagger UI
 ```
 
-## Local launch
+## Configuration
 
-Requirements: Node.js 24 or later, pnpm 11, and Docker with Docker Compose.
+Create `apps/backend/.env` for local development.
 
-1. From the repository root, install dependencies and start PostgreSQL and MinIO:
+| Variable          | Required | Default                 | Purpose                                        |
+| ----------------- | -------- | ----------------------- | ---------------------------------------------- |
+| `DATABASE_URL`    | Yes      | —                       | PostgreSQL connection string.                  |
+| `S3_ENDPOINT`     | Yes      | —                       | MinIO or S3-compatible service endpoint.       |
+| `S3_ACCESS_KEY`   | Yes      | —                       | Object-storage access key.                     |
+| `S3_SECRET_KEY`   | Yes      | —                       | Object-storage secret key.                     |
+| `S3_BUCKET`       | Yes      | —                       | Bucket used for article images.                |
+| `PUBLIC_API_URL`  | Yes      | —                       | Public API origin used in uploaded image URLs. |
+| `PORT`            | No       | `3000`                  | HTTP listen port.                              |
+| `FRONTEND_ORIGIN` | No       | `http://localhost:5173` | Allowed browser origin for CORS.               |
 
-   ```bash
-   pnpm install
-   docker compose up -d
-   ```
+`PUBLIC_API_URL` must be an HTTP(S) origin without a path, query, fragment, or
+credentials.
 
-2. Create `apps/backend/.env` with the local service settings:
+Example local configuration:
 
-   ```dotenv
-   DATABASE_URL="postgresql://paper-pg:paper-pwd@localhost:5432/paper-db"
-   S3_ENDPOINT="http://localhost:9000"
-   S3_ACCESS_KEY="paper-minio"
-   S3_SECRET_KEY="paper-pwd"
-   S3_BUCKET="paper"
-   PUBLIC_API_URL=http://localhost:3000
-   ```
+```dotenv
+DATABASE_URL="postgresql://paper-pg:paper-pwd@localhost:5432/paper-db"
+S3_ENDPOINT="http://localhost:9000"
+S3_ACCESS_KEY="paper-minio"
+S3_SECRET_KEY="paper-pwd"
+S3_BUCKET="paper"
+PUBLIC_API_URL="http://localhost:3000"
+```
 
-   Optionally, set `PORT` (defaults to `3000`) and `FRONTEND_ORIGIN` (defaults to `http://localhost:5173`).
-   `PUBLIC_API_URL` must be the externally visible Paper API origin used in frontend upload URLs.
-   It must be an HTTP(S) origin with no path, query, fragment, or credentials.
+## Local development
 
-3. Apply database migrations and start the backend:
+From the repository root:
 
-   ```bash
-   pnpm --filter @paper-app/backend db:migrate
-   pnpm exec turbo run dev --filter=@paper-app/backend
-   ```
+```bash
+pnpm install
+docker compose up -d
+pnpm --filter @paper-app/backend db:migrate
+pnpm exec turbo run dev --filter=@paper-app/backend
+```
 
-The API will be available at [http://localhost:3000](http://localhost:3000). On startup, the backend creates the configured S3 bucket if it does not yet exist. MinIO Console is available at [http://localhost:9001](http://localhost:9001).
+The Turbo command builds `@paper-app/types` before starting the backend,
+including on a clean checkout. The direct package command
+`pnpm --filter @paper-app/backend dev` expects that shared package to have
+already been built. Restart the Turbo development command after changing the
+shared package.
 
-Use `pnpm dev` from the repository root to start both applications. Both this
-command and the filtered Turbo command above build `@paper-app/types` before
-starting the applications, including on a clean checkout. The direct package
-command `pnpm --filter @paper-app/backend dev` requires that shared build to
-already exist. Restart the Turbo dev command after editing the shared package.
+The API is available at [http://localhost:3000](http://localhost:3000). On
+startup, the backend creates the configured bucket if it does not already
+exist. The local MinIO Console is available at
+[http://localhost:9001](http://localhost:9001).
 
-## API
+## Commands
 
-The OpenAPI 3.1 contract is available from the running backend at
-[`/openapi.json`](http://localhost:3000/openapi.json). The interactive Swagger UI is at
-[`/docs`](http://localhost:3000/docs). Import the former URL (or the generated file below)
-directly into Postman.
+Run commands from the repository root:
+
+| Command                                               | Description                                |
+| ----------------------------------------------------- | ------------------------------------------ |
+| `pnpm exec turbo run dev --filter=@paper-app/backend` | Build dependencies and start watch mode.   |
+| `pnpm --filter @paper-app/backend db:migrate`         | Apply pending Prisma migrations.           |
+| `pnpm --filter @paper-app/backend test`               | Run the serialized integration test suite. |
+| `pnpm --filter @paper-app/backend check-types`        | Type-check without emitting files.         |
+| `pnpm --filter @paper-app/backend build`              | Compile the backend to `dist`.             |
+| `pnpm --filter @paper-app/backend start`              | Run the compiled server.                   |
+| `pnpm --filter @paper-app/backend docs:postman`       | Regenerate the Postman collection.         |
+| `pnpm --filter @paper-app/backend cleanup:uploads`    | Delete eligible unattached uploads.        |
+
+Tests require the configured PostgreSQL database and object-storage service.
+Apply migrations before running them.
+
+## API documentation
+
+The running backend publishes its OpenAPI 3.1 contract at
+[`/openapi.json`](http://localhost:3000/openapi.json) and Swagger UI at
+[`/docs`](http://localhost:3000/docs). The OpenAPI document is the canonical
+reference for request and response schemas.
 
 | Method   | Path              | Description                                               |
 | -------- | ----------------- | --------------------------------------------------------- |
@@ -98,78 +123,53 @@ directly into Postman.
 | `PATCH`  | `/articles/:slug` | Update an article with `X-Edit-Token`.                    |
 | `DELETE` | `/articles/:slug` | Delete an article with `X-Edit-Token`.                    |
 | `POST`   | `/uploads`        | Upload a JPEG, PNG, WebP, or GIF image up to 5 MiB.       |
-| `GET`    | `/uploads/:key`   | Get an uploaded image.                                    |
+| `GET`    | `/uploads/:key`   | Get a tracked uploaded image.                             |
 
-Create and update titles have a 200-character maximum. Article content must be a
-strict TipTap document. Allowed nodes are `doc`, `paragraph`, `text`, `heading`
-(levels 2 and 3), `blockquote`, `bulletList`, `orderedList`, `listItem`,
-`codeBlock`, `horizontalRule`, `hardBreak`, and `image`. Allowed marks are
-`bold`, `italic`, `strike`, `underline`, `code`, and `link`. Links may use only
-`http:`, `https:`, or `mailto:` URLs. The validator checks parent-child
-relationships and known attributes; unknown nodes, marks, attributes, and
-properties are rejected with HTTP `400` without changing the submitted content.
-The maximum document depth is 20 and the maximum total node count is 10,000,
-both including the root. The JSON request body retains its outer 1 MiB limit
-and receives HTTP `413` when exceeded.
+Article titles have a 200-character maximum. Content must match the strict and
+bounded TipTap schema described by OpenAPI. JSON request bodies have a 1 MiB
+limit.
 
-`POST /uploads` returns a `key` and a canonical public `url` under
-`PUBLIC_API_URL`, for example
-`http://localhost:3000/uploads/550e8400-e29b-41d4-a716-446655440000.png`.
-Article image nodes may reference only generated
-`/uploads/<uuid>.<extension>` URLs under that configured origin. Supported
-extensions are `jpg`, `png`, `webp`, and `gif`; a different origin or a URL
-with a query or fragment is rejected with HTTP `400` as article content.
+Image uploads must decode as the declared JPEG, PNG, WebP, or GIF type. The
+encoded body limit is 5 MiB and the aggregate decoded limit is 40,000,000
+pixels across all frames. Accepted source bytes are stored unchanged. Article
+content may reference only tracked, canonical upload URLs under
+`PUBLIC_API_URL`.
 
-The upload endpoint accepts the raw encoded body up to 5 MiB. It fully decodes
-JPEG, PNG, WebP, and GIF content (including animated frames), permits at most
-40,000,000 decoded pixels across all frames, and requires the detected format
-to match the declared `Content-Type`. Invalid, truncated, unsupported, and
-MIME-mismatched content receives HTTP `415`; encoded-size and decoded-dimension
-limits receive HTTP `413`. Accepted source bytes are stored unchanged.
+## Edit-token lifecycle
 
-PostgreSQL tracks every accepted upload and is authoritative for both reads and
-article references. A missing tracking row or missing object receives HTTP
-`404` on the read endpoint. Creating or updating article content with an
-otherwise canonical but untracked upload URL receives HTTP `400` atomically.
+`POST /articles` returns a cryptographically random 32-byte `editToken` once as
+64 lowercase hexadecimal characters. Clients send that raw value unchanged in
+the `X-Edit-Token` header for `PATCH` and `DELETE` requests.
+
+The database stores only the lowercase SHA-256 digest. Public article objects
+never contain the raw token or its digest. The development migration that
+introduced hashing invalidated edit access for older local articles; recreate
+them when edit access is needed.
 
 ## Upload cleanup
 
-Build the backend and manually remove stale unattached uploads with:
+Build the backend and remove stale unattached uploads with:
 
 ```bash
 pnpm --filter @paper-app/backend build
 pnpm --filter @paper-app/backend cleanup:uploads
 ```
 
-Each run examines at most 100 records. An unattached upload is eligible when it
-was created at or before the inclusive 24-hour cutoff. Object deletion is
-idempotent, so rerunning the command safely recovers from partial failures. The
-command continues after individual failures, prints the failed object keys,
-and exits non-zero if any deletion failed.
+Each run examines at most 100 records. An unattached upload becomes eligible at
+the inclusive 24-hour cutoff. Object deletion is idempotent, so rerunning the
+command can recover from partial failures. The command continues after an
+individual failure, prints its object key, and exits non-zero if any deletion
+failed.
 
-Production scheduling and article-to-asset ownership are intentionally deferred;
-operators must schedule or invoke this command externally when desired.
-
-## Editing an article
-
-`POST /articles` returns a cryptographically random 32-byte `editToken` once as
-64 lowercase hexadecimal characters. Store that raw value on the client and
-send it unchanged in the `X-Edit-Token` header for `PATCH` and `DELETE`
-requests.
-
-The database stores only the lowercase SHA-256 digest of the token. Public
-create, read, and update article objects never contain the raw token or its
-digest. The Phase 4 development migration intentionally invalidates edit
-access for articles created before hashed-token storage; recreate those
-development articles when edit access is needed.
+Production scheduling and article-to-asset ownership are intentionally
+deferred. Operators must schedule or invoke the cleanup command externally.
 
 ## Postman collection
 
-Generate a Postman collection from the same OpenAPI contract:
+Generate `postman/paper-api.postman_collection.json` from the OpenAPI contract:
 
 ```bash
 pnpm --filter @paper-app/backend docs:postman
 ```
 
-The command writes `postman/paper-api.postman_collection.json`. Set its `baseUrl`
-collection variable to the environment you want to test.
+Set the collection's `baseUrl` variable to the environment you want to test.
