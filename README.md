@@ -41,14 +41,18 @@ article with a private recovery token; reader accounts are not required.
 - Node.js 24 or later.
 - pnpm 11.
 - Docker with Docker Compose.
+- curl for the local MinIO readiness check.
 
 ## Quick start
 
-1. Install the workspace dependencies and start PostgreSQL and MinIO:
+1. Install the workspace dependencies, start PostgreSQL and MinIO, and wait
+   until both services are ready:
 
    ```bash
    pnpm install
    docker compose up -d
+   until docker compose exec -T postgres pg_isready -U paper-pg -d paper-db; do sleep 1; done
+   until curl --fail --silent http://localhost:9000/minio/health/live >/dev/null; do sleep 1; done
    ```
 
 2. Create `apps/backend/.env`:
@@ -102,9 +106,9 @@ Run these commands from the repository root:
 | `pnpm test`         | Run preflight checks and application test suites. |
 | `pnpm build`        | Build all workspace packages and applications.    |
 
-Backend integration tests require PostgreSQL, MinIO, the backend environment
-variables shown above, and applied migrations. CI runs formatting, linting,
-type checks, tests, and builds for every push and pull request.
+Backend tests require ready PostgreSQL and MinIO services, a configured backend
+environment, and applied migrations. CI runs formatting, linting, type checks,
+tests, and builds for every push and pull request.
 
 ## Project status
 
@@ -139,11 +143,12 @@ succeeds without executing its intended tasks does not count as passing.
 ## Production roadmap
 
 The intended deployment has Caddy terminate TLS and forward traffic to Nginx.
-Nginx serves the compiled frontend and proxies `/api/*` requests to the backend.
-The production stack has not been implemented yet.
+Nginx serves the compiled frontend and proxies `/api/*` and `/uploads/*`
+requests to the backend. The production stack has not been implemented yet.
 
 - [ ] Add production Dockerfiles for the backend and frontend.
-- [ ] Configure Nginx to serve the frontend and forward API requests.
+- [ ] Configure Nginx to serve the frontend and forward `/api/*` and
+      `/uploads/*` requests.
 - [ ] Add `docker-compose.production.yml` with PostgreSQL, MinIO, backend,
       frontend, and Caddy.
 - [ ] Add a `Caddyfile` that exposes only ports `80` and `443`.

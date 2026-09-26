@@ -44,8 +44,9 @@ VITE_API_URL="https://api.example.com"
 
 ## Local development
 
-Start PostgreSQL, MinIO, and the backend as described in the
-[project quick start](../../README.md#quick-start). Then run:
+The [project quick start](../../README.md#quick-start) already starts both
+applications. To start only the frontend while a backend is already running,
+run:
 
 ```bash
 pnpm exec turbo run dev --filter=@paper-app/frontend

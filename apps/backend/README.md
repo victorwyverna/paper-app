@@ -51,7 +51,7 @@ Create `apps/backend/.env` for local development.
 | `S3_ACCESS_KEY`   | Yes      | —                       | Object-storage access key.                     |
 | `S3_SECRET_KEY`   | Yes      | —                       | Object-storage secret key.                     |
 | `S3_BUCKET`       | Yes      | —                       | Bucket used for article images.                |
-| `PUBLIC_API_URL`  | Yes      | —                       | Public API origin used in uploaded image URLs. |
+| `PUBLIC_API_URL`  | No       | `http://localhost:3000` | Public API origin used in uploaded image URLs. |
 | `PORT`            | No       | `3000`                  | HTTP listen port.                              |
 | `FRONTEND_ORIGIN` | No       | `http://localhost:5173` | Allowed browser origin for CORS.               |
 
@@ -76,6 +76,8 @@ From the repository root:
 ```bash
 pnpm install
 docker compose up -d
+until docker compose exec -T postgres pg_isready -U paper-pg -d paper-db; do sleep 1; done
+until curl --fail --silent http://localhost:9000/minio/health/live >/dev/null; do sleep 1; done
 pnpm --filter @paper-app/backend db:migrate
 pnpm exec turbo run dev --filter=@paper-app/backend
 ```
@@ -95,16 +97,16 @@ exist. The local MinIO Console is available at
 
 Run commands from the repository root:
 
-| Command                                               | Description                                |
-| ----------------------------------------------------- | ------------------------------------------ |
-| `pnpm exec turbo run dev --filter=@paper-app/backend` | Build dependencies and start watch mode.   |
-| `pnpm --filter @paper-app/backend db:migrate`         | Apply pending Prisma migrations.           |
-| `pnpm --filter @paper-app/backend test`               | Run the serialized integration test suite. |
-| `pnpm --filter @paper-app/backend check-types`        | Type-check without emitting files.         |
-| `pnpm --filter @paper-app/backend build`              | Compile the backend to `dist`.             |
-| `pnpm --filter @paper-app/backend start`              | Run the compiled server.                   |
-| `pnpm --filter @paper-app/backend docs:postman`       | Regenerate the Postman collection.         |
-| `pnpm --filter @paper-app/backend cleanup:uploads`    | Delete eligible unattached uploads.        |
+| Command                                               | Description                              |
+| ----------------------------------------------------- | ---------------------------------------- |
+| `pnpm exec turbo run dev --filter=@paper-app/backend` | Build dependencies and start watch mode. |
+| `pnpm --filter @paper-app/backend db:migrate`         | Apply pending Prisma migrations.         |
+| `pnpm --filter @paper-app/backend test`               | Run the serialized backend test suite.   |
+| `pnpm --filter @paper-app/backend check-types`        | Type-check without emitting files.       |
+| `pnpm --filter @paper-app/backend build`              | Compile the backend to `dist`.           |
+| `pnpm --filter @paper-app/backend start`              | Run the compiled server.                 |
+| `pnpm --filter @paper-app/backend docs:postman`       | Regenerate the Postman collection.       |
+| `pnpm --filter @paper-app/backend cleanup:uploads`    | Delete eligible unattached uploads.      |
 
 Tests require the configured PostgreSQL database and object-storage service.
 Apply migrations before running them.
@@ -134,6 +136,9 @@ encoded body limit is 5 MiB and the aggregate decoded limit is 40,000,000
 pixels across all frames. Accepted source bytes are stored unchanged. Article
 content may reference only tracked, canonical upload URLs under
 `PUBLIC_API_URL`.
+
+`POST /uploads` accepts the encoded image bytes directly in the request body
+with a matching image `Content-Type`. It does not accept `multipart/form-data`.
 
 ## Edit-token lifecycle
 
