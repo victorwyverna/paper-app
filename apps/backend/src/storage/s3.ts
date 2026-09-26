@@ -1,11 +1,21 @@
 import {
   CreateBucketCommand,
+  DeleteObjectCommand,
   HeadBucketCommand,
   PutObjectCommand,
   S3Client,
   GetObjectCommand,
   S3ServiceException,
 } from '@aws-sdk/client-s3';
+
+function isObjectNotFound(error: unknown): boolean {
+  return (
+    error instanceof S3ServiceException &&
+    (error.$metadata.httpStatusCode === 404 ||
+      error.name === 'NoSuchKey' ||
+      error.name === 'NotFound')
+  );
+}
 
 function requiredEnv(name: string): string {
   const value = process.env[name];
@@ -52,6 +62,15 @@ export async function uploadFile(
   );
 }
 
+export async function deleteFile(key: string): Promise<void> {
+  try {
+    await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+  } catch (error) {
+    if (isObjectNotFound(error)) return;
+    throw error;
+  }
+}
+
 export async function getFile(key: string) {
   try {
     const result = await s3.send(
@@ -70,12 +89,7 @@ export async function getFile(key: string) {
       contentType: result.ContentType ?? 'application/octet-stream',
     };
   } catch (error) {
-    if (
-      error instanceof S3ServiceException &&
-      error.$metadata.httpStatusCode === 404
-    ) {
-      return null;
-    }
+    if (isObjectNotFound(error)) return null;
 
     throw error;
   }

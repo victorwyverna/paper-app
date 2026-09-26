@@ -7,6 +7,7 @@ import type {
   UpdateArticleInput,
 } from '../schemas/article.js';
 import { generateEditToken, hashEditToken } from './edit-token.js';
+import { persistWithArticleUploads } from './article-uploads.js';
 
 const articleSlugUniqueConstraint = 'Article_slug_key';
 
@@ -76,15 +77,19 @@ export async function createArticle(input: CreateArticleInput) {
     const slug = suffix === 1 ? baseSlug : `${baseSlug}-${suffix}`;
 
     try {
-      const article = await prisma.article.create({
-        data: {
-          slug,
-          editTokenHash,
-          title: input.title,
-          content: input.content as Prisma.InputJsonValue,
-        },
-        select: publicArticleSelect,
-      });
+      const article = await prisma.$transaction((tx) =>
+        persistWithArticleUploads(tx, input.content, () =>
+          tx.article.create({
+            data: {
+              slug,
+              editTokenHash,
+              title: input.title,
+              content: input.content as Prisma.InputJsonValue,
+            },
+            select: publicArticleSelect,
+          })
+        )
+      );
 
       return {
         article,
@@ -112,16 +117,40 @@ export async function updateArticle(
   editToken: string,
   input: UpdateArticleInput
 ) {
+  const editTokenHash = hashEditToken(editToken);
+
+  if (input.content !== undefined) {
+    return prisma.$transaction(async (tx) => {
+      const authenticated = await tx.$queryRaw<Array<{ id: number }>>(
+        Prisma.sql`SELECT "id"
+          FROM "Article"
+          WHERE "slug" = ${slug}
+            AND "editTokenHash" = ${editTokenHash}
+          FOR UPDATE`
+      );
+      const articleId = authenticated[0]?.id;
+      if (articleId === undefined) return null;
+
+      return persistWithArticleUploads(tx, input.content!, () =>
+        tx.article.update({
+          where: { id: articleId },
+          data: {
+            ...(input.title !== undefined ? { title: input.title } : {}),
+            content: input.content as Prisma.InputJsonValue,
+          },
+          select: publicArticleSelect,
+        })
+      );
+    });
+  }
+
   const result = await prisma.article.updateMany({
     where: {
       slug,
-      editTokenHash: hashEditToken(editToken),
+      editTokenHash,
     },
     data: {
       ...(input.title !== undefined ? { title: input.title } : {}),
-      ...(input.content !== undefined
-        ? { content: input.content as Prisma.InputJsonValue }
-        : {}),
     },
   });
 

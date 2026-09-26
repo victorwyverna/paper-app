@@ -39,7 +39,7 @@ Write. Publish. Share.
 - [x] Enforce a strict and bounded TipTap document schema.
 - [x] Make article slug creation race-safe.
 - [x] Store only edit-token hashes and add recovery UX.
-- [ ] Validate uploaded image content and track upload lifecycle.
+- [x] Validate uploaded image content and track upload lifecycle.
 
 ### Definition of Done
 

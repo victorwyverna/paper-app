@@ -120,6 +120,36 @@ Article image nodes may reference only generated
 extensions are `jpg`, `png`, `webp`, and `gif`; a different origin or a URL
 with a query or fragment is rejected with HTTP `400` as article content.
 
+The upload endpoint accepts the raw encoded body up to 5 MiB. It fully decodes
+JPEG, PNG, WebP, and GIF content (including animated frames), permits at most
+40,000,000 decoded pixels across all frames, and requires the detected format
+to match the declared `Content-Type`. Invalid, truncated, unsupported, and
+MIME-mismatched content receives HTTP `415`; encoded-size and decoded-dimension
+limits receive HTTP `413`. Accepted source bytes are stored unchanged.
+
+PostgreSQL tracks every accepted upload and is authoritative for both reads and
+article references. A missing tracking row or missing object receives HTTP
+`404` on the read endpoint. Creating or updating article content with an
+otherwise canonical but untracked upload URL receives HTTP `400` atomically.
+
+## Upload cleanup
+
+Build the backend and manually remove stale unattached uploads with:
+
+```bash
+pnpm --filter @paper-app/backend build
+pnpm --filter @paper-app/backend cleanup:uploads
+```
+
+Each run examines at most 100 records. An unattached upload is eligible when it
+was created at or before the inclusive 24-hour cutoff. Object deletion is
+idempotent, so rerunning the command safely recovers from partial failures. The
+command continues after individual failures, prints the failed object keys,
+and exits non-zero if any deletion failed.
+
+Production scheduling and article-to-asset ownership are intentionally deferred;
+operators must schedule or invoke this command externally when desired.
+
 ## Editing an article
 
 `POST /articles` returns a cryptographically random 32-byte `editToken` once as

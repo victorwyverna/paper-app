@@ -6,23 +6,25 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "docs:postman": "npm run build && node scripts/generate-postman-collection.mjs",
+    "cleanup:uploads": "node dist/cli/cleanup-uploads.js",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
     "db:migrate": "prisma migrate deploy",
-    "test": "tsx --test \"src/**/*.test.ts\"",
+    "test": "tsx --test --test-concurrency=1 \"src/**/*.test.ts\"",
     "check-types": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.ts\" package.json",
     "format:check": "prettier --check \"src/**/*.ts\" package.json"
   },
   "dependencies": {
-    "@paper-app/types": "workspace:*",
     "@aws-sdk/client-s3": "^3.1118.0",
+    "@paper-app/types": "workspace:*",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "@sindresorhus/slugify": "^3.0.0",
     "dotenv": "^17.4.2",
     "pg": "^8.23.0",
     "prisma": "^7.10.0",
+    "sharp": "^0.35.4",
     "zod": "^4.4.3"
   },
   "devDependencies": {
