@@ -589,3 +589,22 @@ test('OpenAPI upload response exposes the canonical image URL', () => {
     'uri'
   );
 });
+
+test('OpenAPI upload documents decoded-byte validation and failure classes', () => {
+  const upload = openApiDocument.paths['/uploads'].post;
+  assert.match(upload.description, /raw file/i);
+  assert.match(upload.description, /decoded/i);
+  assert.match(upload.description, /match.*Content-Type/i);
+  assert.match(
+    openApiDocument.components.responses.ImageTooLarge.description,
+    /decoded.*dimensions/i
+  );
+  assert.match(
+    openApiDocument.components.responses.UnsupportedImage.description,
+    /invalid.*mismatch/i
+  );
+  assert.match(
+    openApiDocument.paths['/uploads/{key}'].get.description,
+    /tracked.*PostgreSQL/i
+  );
+});

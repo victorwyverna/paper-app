@@ -109,7 +109,7 @@ export const openApiDocument = {
         tags: ['Uploads'],
         summary: 'Upload an image',
         description:
-          'Send the raw file as the request body, not `multipart/form-data`. Maximum size: 5 MiB.',
+          'Send the raw file as the request body, not `multipart/form-data`. Maximum encoded size: 5 MiB. Decoded JPEG, PNG, WebP, or GIF content is limited to 40,000,000 total frame pixels, and the detected format must match the claimed Content-Type.',
         requestBody: {
           required: true,
           content: {
@@ -139,6 +139,8 @@ export const openApiDocument = {
       get: {
         tags: ['Uploads'],
         summary: 'Get an uploaded image',
+        description:
+          'Returns bytes only when the key has a tracked PostgreSQL upload record and a stored object. The tracked detected MIME is authoritative.',
         responses: {
           '200': {
             description: 'Image bytes',
@@ -229,7 +231,8 @@ export const openApiDocument = {
         },
       },
       ImageTooLarge: {
-        description: 'Image exceeds 5 MiB',
+        description:
+          'Encoded image exceeds 5 MiB or decoded image dimensions exceed 40,000,000 total frame pixels',
         content: {
           'application/json': {
             schema: { $ref: '#/components/schemas/Error' },
@@ -237,7 +240,8 @@ export const openApiDocument = {
         },
       },
       UnsupportedImage: {
-        description: 'Unsupported image content type',
+        description:
+          'Image bytes are invalid, unsupported, truncated, or mismatch the claimed Content-Type',
         content: {
           'application/json': {
             schema: { $ref: '#/components/schemas/Error' },

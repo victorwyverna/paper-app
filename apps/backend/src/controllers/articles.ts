@@ -11,6 +11,7 @@ import {
   updateArticle,
   deleteArticle,
 } from '../services/article-service.js';
+import { MissingUploadError } from '../services/article-uploads.js';
 
 export async function createArticleController(
   request: IncomingMessage,
@@ -45,7 +46,16 @@ export async function createArticleController(
     return;
   }
 
-  const article = await createArticle(result.data);
+  let article;
+  try {
+    article = await createArticle(result.data);
+  } catch (error) {
+    if (error instanceof MissingUploadError) {
+      sendJson(response, 400, { message: 'Invalid article data' });
+      return;
+    }
+    throw error;
+  }
 
   sendJson(response, 201, article);
 }
@@ -105,7 +115,16 @@ export async function updateArticleController(
     return;
   }
 
-  const article = await updateArticle(slug, editToken, result.data);
+  let article;
+  try {
+    article = await updateArticle(slug, editToken, result.data);
+  } catch (error) {
+    if (error instanceof MissingUploadError) {
+      sendJson(response, 400, { message: 'Invalid article data' });
+      return;
+    }
+    throw error;
+  }
 
   if (!article) {
     sendJson(response, 403, { message: 'Invalid edit token' });

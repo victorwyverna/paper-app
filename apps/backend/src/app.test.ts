@@ -1,20 +1,89 @@
 import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
+import { request as httpRequest } from 'node:http';
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  DeleteObjectCommand,
+  ListObjectsV2Command,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import type { TiptapDocument } from '@paper-app/types';
 
 import { createApp } from './app.js';
 import { prisma } from './db/prisma.js';
+import { persistWithArticleUploads } from './services/article-uploads.js';
 import { hashEditToken } from './services/edit-token.js';
+import { cleanupStaleUploads } from './services/upload-cleanup.js';
 import { ensureBucket, getFile } from './storage/s3.js';
 import { cleanupResources } from './test-utils/cleanup.js';
+import {
+  gifFixture,
+  jpegFixture,
+  oversizedWebpFixture,
+  pngFixture,
+  truncatedFixture,
+  webpFixture,
+} from './test-utils/image-fixtures.js';
 
 const server = createApp();
 let baseUrl = '';
 type CreatedArticle = { slug: string; editToken: string };
 const createdArticles: CreatedArticle[] = [];
 const uploadedKeys: string[] = [];
+
+function createS3Client(): S3Client {
+  return new S3Client({
+    endpoint: process.env.S3_ENDPOINT!,
+    region: 'us-east-1',
+    forcePathStyle: true,
+    credentials: {
+      accessKeyId: process.env.S3_ACCESS_KEY!,
+      secretAccessKey: process.env.S3_SECRET_KEY!,
+    },
+  });
+}
+
+async function listObjectKeys(): Promise<string[]> {
+  const s3 = createS3Client();
+  try {
+    const result = await s3.send(
+      new ListObjectsV2Command({ Bucket: process.env.S3_BUCKET! })
+    );
+    return (result.Contents ?? [])
+      .flatMap(({ Key }) => (Key ? [Key] : []))
+      .sort();
+  } finally {
+    s3.destroy();
+  }
+}
+
+function requestBody(bytes: Buffer): Uint8Array<ArrayBuffer> {
+  const body = new Uint8Array(bytes.byteLength);
+  body.set(bytes);
+  return body;
+}
+
+async function seedTrackedUpload(
+  options: {
+    key?: string;
+    attachedAt?: Date;
+    createdAt?: Date;
+  } = {}
+): Promise<{ key: string; src: string }> {
+  const key = options.key ?? `${randomUUID()}.png`;
+  uploadedKeys.push(key);
+  await prisma.upload.create({
+    data: {
+      objectKey: key,
+      detectedContentType: 'image/png',
+      byteSize: pngFixture().byteLength,
+      ...(options.attachedAt ? { attachedAt: options.attachedAt } : {}),
+      ...(options.createdAt ? { createdAt: options.createdAt } : {}),
+    },
+  });
+  return { key, src: `${process.env.PUBLIC_API_URL}/uploads/${key}` };
+}
 
 async function postArticle(input: unknown): Promise<Response> {
   const response = await fetch(`${baseUrl}/articles`, {
@@ -88,15 +157,7 @@ before(async () => {
 
 after(async () => {
   try {
-    const s3 = new S3Client({
-      endpoint: process.env.S3_ENDPOINT!,
-      region: 'us-east-1',
-      forcePathStyle: true,
-      credentials: {
-        accessKeyId: process.env.S3_ACCESS_KEY!,
-        secretAccessKey: process.env.S3_SECRET_KEY!,
-      },
-    });
+    const s3 = createS3Client();
     try {
       await cleanupResources([
         ...createdArticles.map(
@@ -111,6 +172,17 @@ after(async () => {
           );
           assert.equal(await getFile(key), null);
         }),
+        async () => {
+          await prisma.upload.deleteMany({
+            where: { objectKey: { in: uploadedKeys } },
+          });
+          assert.equal(
+            await prisma.upload.count({
+              where: { objectKey: { in: uploadedKeys } },
+            }),
+            0
+          );
+        },
         async () => {
           assert.equal(
             await prisma.article.count({
@@ -682,60 +754,172 @@ test('returns 403 when deleting with an invalid edit token', async () => {
   assert.equal(body.message, 'Invalid edit token');
 });
 
-test('uploads and returns an image', async () => {
-  const image = Buffer.from('test image content');
+for (const { name, contentType, extension, fixture } of [
+  {
+    name: 'JPEG',
+    contentType: 'image/jpeg',
+    extension: 'jpg',
+    fixture: jpegFixture,
+  },
+  {
+    name: 'PNG',
+    contentType: 'image/png',
+    extension: 'png',
+    fixture: pngFixture,
+  },
+  {
+    name: 'WebP',
+    contentType: 'image/webp',
+    extension: 'webp',
+    fixture: webpFixture,
+  },
+  {
+    name: 'GIF',
+    contentType: 'image/gif',
+    extension: 'gif',
+    fixture: gifFixture,
+  },
+] as const) {
+  test(`tracks, stores, and returns a decoded ${name} image`, async () => {
+    const image = fixture();
+    const uploadResponse = await fetch(`${baseUrl}/uploads`, {
+      method: 'POST',
+      headers: { 'Content-Type': contentType },
+      body: requestBody(image),
+    });
 
-  const uploadResponse = await fetch(`${baseUrl}/uploads`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'image/png',
-    },
-    body: image,
+    assert.equal(uploadResponse.status, 201);
+    const uploaded = (await uploadResponse.json()) as {
+      key: string;
+      url: string;
+    };
+    uploadedKeys.push(uploaded.key);
+
+    assert.match(uploaded.key, new RegExp(`^[a-f0-9-]+\\.${extension}$`));
+    assert.equal(
+      uploaded.url,
+      `${process.env.PUBLIC_API_URL}/uploads/${uploaded.key}`
+    );
+    const row = await prisma.upload.findUniqueOrThrow({
+      where: { objectKey: uploaded.key },
+    });
+    assert.equal(row.detectedContentType, contentType);
+    assert.equal(row.byteSize, image.byteLength);
+    assert.equal(row.attachedAt, null);
+
+    const getResponse = await fetch(`${baseUrl}/uploads/${uploaded.key}`);
+    assert.equal(getResponse.status, 200);
+    assert.equal(getResponse.headers.get('content-type'), contentType);
+    assert.deepEqual(Buffer.from(await getResponse.arrayBuffer()), image);
   });
+}
 
-  assert.equal(uploadResponse.status, 201);
-
-  const uploaded = (await uploadResponse.json()) as {
-    key: string;
-    url: string;
+async function assertRejectedUploadDoesNotWrite(input: {
+  contentType?: string;
+  body: Buffer;
+}): Promise<Response> {
+  const rowsBefore = await prisma.upload.count();
+  const objectsBefore = await listObjectKeys();
+  const request: RequestInit = {
+    method: 'POST',
+    body: requestBody(input.body),
   };
-  uploadedKeys.push(uploaded.key);
+  if (input.contentType) {
+    request.headers = { 'Content-Type': input.contentType };
+  }
+  const response = await fetch(`${baseUrl}/uploads`, request);
+  assert.equal(response.status, 415);
+  assert.equal(await prisma.upload.count(), rowsBefore);
+  assert.deepEqual(await listObjectKeys(), objectsBefore);
+  return response;
+}
 
-  assert.match(uploaded.key, /^[a-f0-9-]+\.png$/);
-  assert.equal(
-    uploaded.url,
-    `${process.env.PUBLIC_API_URL}/uploads/${uploaded.key}`
-  );
-
-  const getResponse = await fetch(`${baseUrl}/uploads/${uploaded.key}`);
-
-  assert.equal(getResponse.status, 200);
-  assert.equal(getResponse.headers.get('content-type'), 'image/png');
-
-  const returnedImage = Buffer.from(await getResponse.arrayBuffer());
-
-  assert.deepEqual(returnedImage, image);
+test('rejects missing and unsupported claimed image types before writes', async () => {
+  for (const contentType of [undefined, 'text/plain', 'image/svg+xml']) {
+    const response = await assertRejectedUploadDoesNotWrite({
+      ...(contentType ? { contentType } : {}),
+      body: pngFixture(),
+    });
+    assert.deepEqual(await response.json(), {
+      message: 'Only JPEG, PNG, WebP, and GIF images are allowed',
+    });
+  }
 });
 
-test('rejects an unsupported image content type', async () => {
+test('rejects repeated physical Content-Type headers before writes', async () => {
+  const rowsBefore = await prisma.upload.count();
+  const objectsBefore = await listObjectKeys();
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const image = pngFixture();
+  const result = await new Promise<{ statusCode: number; body: string }>(
+    (resolve, reject) => {
+      const request = httpRequest(
+        {
+          hostname: '127.0.0.1',
+          port: address.port,
+          path: '/uploads',
+          method: 'POST',
+          headers: {
+            'Content-Type': ['image/png', 'image/jpeg'],
+            'Content-Length': image.byteLength,
+          },
+        },
+        (response) => {
+          const chunks: Buffer[] = [];
+          response.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+          response.on('end', () =>
+            resolve({
+              statusCode: response.statusCode ?? 0,
+              body: Buffer.concat(chunks).toString('utf8'),
+            })
+          );
+        }
+      );
+      request.on('error', reject);
+      request.end(image);
+    }
+  );
+
+  if (result.statusCode === 201) {
+    uploadedKeys.push((JSON.parse(result.body) as { key: string }).key);
+  }
+
+  assert.equal(result.statusCode, 415);
+  assert.equal(await prisma.upload.count(), rowsBefore);
+  assert.deepEqual(await listObjectKeys(), objectsBefore);
+});
+
+test('rejects invalid, truncated, and mismatched images before writes', async () => {
+  for (const input of [
+    { contentType: 'image/png', body: Buffer.from('not an image') },
+    { contentType: 'image/png', body: truncatedFixture(pngFixture()) },
+    { contentType: 'image/jpeg', body: pngFixture() },
+  ]) {
+    const response = await assertRejectedUploadDoesNotWrite(input);
+    assert.equal(response.status, 415);
+  }
+});
+
+test('rejects an empty image body', async () => {
   const response = await fetch(`${baseUrl}/uploads`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'text/plain',
-    },
-    body: 'not an image',
+    headers: { 'Content-Type': 'image/png' },
+    body: requestBody(Buffer.alloc(0)),
   });
+  assert.equal(response.status, 400);
+});
 
-  assert.equal(response.status, 415);
-
-  const body = (await response.json()) as {
-    message: string;
-  };
-
-  assert.equal(
-    body.message,
-    'Only JPEG, PNG, WebP, and GIF images are allowed'
-  );
+test('rejects an image above the decoded pixel limit', async () => {
+  const response = await fetch(`${baseUrl}/uploads`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'image/webp' },
+    body: requestBody(oversizedWebpFixture()),
+  });
+  assert.equal(response.status, 413);
+  assert.deepEqual(await response.json(), {
+    message: 'Image dimensions are too large',
+  });
 });
 
 test('rejects an image larger than 5 MiB', async () => {
@@ -744,7 +928,7 @@ test('rejects an image larger than 5 MiB', async () => {
     headers: {
       'Content-Type': 'image/png',
     },
-    body: Buffer.alloc(5 * 1024 * 1024 + 1),
+    body: requestBody(Buffer.alloc(5 * 1024 * 1024 + 1)),
   });
 
   assert.equal(response.status, 413);
@@ -756,10 +940,265 @@ test('rejects an image larger than 5 MiB', async () => {
   assert.equal(body.message, 'Image is too large');
 });
 
+test('returns 404 for an untracked object key', async () => {
+  const response = await fetch(`${baseUrl}/uploads/${randomUUID()}.png`);
+  assert.equal(response.status, 404);
+});
+
+test('returns 404 when a tracked upload object is missing', async () => {
+  const key = `${randomUUID()}.png`;
+  uploadedKeys.push(key);
+  await prisma.upload.create({
+    data: {
+      objectKey: key,
+      detectedContentType: 'image/png',
+      byteSize: pngFixture().byteLength,
+    },
+  });
+
+  const response = await fetch(`${baseUrl}/uploads/${key}`);
+  assert.equal(response.status, 404);
+});
+
 const doc = (...content: unknown[]) => ({ type: 'doc', content });
 const paragraph = { type: 'paragraph' };
 const text = { type: 'text', text: 'Original content' };
 const inline = (node: unknown) => doc({ type: 'paragraph', content: [node] });
+const imageNode = (src: string) => ({ type: 'image', attrs: { src } });
+
+async function patchArticle(
+  article: CreatedArticle,
+  input: unknown,
+  editToken = article.editToken
+): Promise<Response> {
+  return fetch(`${baseUrl}/articles/${article.slug}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Edit-Token': editToken,
+    },
+    body: JSON.stringify(input),
+  });
+}
+
+test('article create sets one attachedAt for every unique upload key', async () => {
+  const first = await seedTrackedUpload();
+  const second = await seedTrackedUpload();
+  const content = doc(
+    imageNode(first.src),
+    imageNode(second.src),
+    imageNode(first.src)
+  );
+
+  const response = await postArticle({
+    title: `Attach uploads ${randomUUID()}`,
+    content,
+  });
+  assert.equal(response.status, 201);
+
+  const rows = await prisma.upload.findMany({
+    where: { objectKey: { in: [first.key, second.key] } },
+    orderBy: { objectKey: 'asc' },
+  });
+  assert.equal(rows.length, 2);
+  assert.ok(rows[0]?.attachedAt);
+  assert.equal(rows[0]?.attachedAt?.getTime(), rows[1]?.attachedAt?.getTime());
+});
+
+test('content update attaches new uploads without changing prior timestamps', async () => {
+  const first = await seedTrackedUpload();
+  const created = await createTestArticle(doc(imageNode(first.src)));
+  const firstAttachedAt = (
+    await prisma.upload.findUniqueOrThrow({ where: { objectKey: first.key } })
+  ).attachedAt;
+  assert.ok(firstAttachedAt);
+
+  const second = await seedTrackedUpload();
+  const response = await patchArticle(created, {
+    content: doc(imageNode(first.src), imageNode(second.src)),
+  });
+  assert.equal(response.status, 200);
+
+  const [firstAfter, secondAfter] = await Promise.all([
+    prisma.upload.findUniqueOrThrow({ where: { objectKey: first.key } }),
+    prisma.upload.findUniqueOrThrow({ where: { objectKey: second.key } }),
+  ]);
+  assert.equal(firstAfter.attachedAt?.getTime(), firstAttachedAt.getTime());
+  assert.ok(secondAfter.attachedAt);
+
+  const titleResponse = await patchArticle(created, { title: 'Title only' });
+  assert.equal(titleResponse.status, 200);
+  assert.equal(
+    (
+      await prisma.upload.findUniqueOrThrow({
+        where: { objectKey: second.key },
+      })
+    ).attachedAt?.getTime(),
+    secondAfter.attachedAt.getTime()
+  );
+});
+
+test('reuse, removal, and article deletion never clear attachedAt', async () => {
+  const originalAttachedAt = new Date('2026-01-02T03:04:05.000Z');
+  const upload = await seedTrackedUpload({ attachedAt: originalAttachedAt });
+  const created = await createTestArticle(doc(imageNode(upload.src)));
+  assert.equal((await patchArticle(created, { content: doc() })).status, 200);
+  assert.equal(
+    (
+      await prisma.upload.findUniqueOrThrow({
+        where: { objectKey: upload.key },
+      })
+    ).attachedAt?.getTime(),
+    originalAttachedAt.getTime()
+  );
+
+  assert.equal(
+    (
+      await fetch(`${baseUrl}/articles/${created.slug}`, {
+        method: 'DELETE',
+        headers: { 'X-Edit-Token': created.editToken },
+      })
+    ).status,
+    204
+  );
+  assert.ok(
+    await prisma.upload.findUnique({ where: { objectKey: upload.key } })
+  );
+});
+
+test('missing upload rolls back article create and authenticated update', async () => {
+  const missingSrc = `${process.env.PUBLIC_API_URL}/uploads/${randomUUID()}.png`;
+  const title = `Missing upload ${randomUUID()}`;
+  const createResponse = await postArticle({
+    title,
+    content: doc(imageNode(missingSrc)),
+  });
+  assert.equal(createResponse.status, 400);
+  assert.deepEqual(await createResponse.json(), {
+    message: 'Invalid article data',
+  });
+  assert.equal(await prisma.article.count({ where: { title } }), 0);
+
+  const created = await createTestArticle(doc());
+  const response = await patchArticle(created, {
+    title: 'Must roll back',
+    content: doc(imageNode(missingSrc)),
+  });
+  assert.equal(response.status, 400);
+  const unchanged = await prisma.article.findUniqueOrThrow({
+    where: { slug: created.slug },
+  });
+  assert.notEqual(unchanged.title, 'Must roll back');
+});
+
+test('invalid edit token does not disclose a missing upload', async () => {
+  const created = await createTestArticle(doc());
+  const missingSrc = `${process.env.PUBLIC_API_URL}/uploads/${randomUUID()}.png`;
+  const response = await patchArticle(
+    created,
+    { content: doc(imageNode(missingSrc)) },
+    'invalid-token'
+  );
+  assert.equal(response.status, 403);
+  assert.deepEqual(await response.json(), { message: 'Invalid edit token' });
+});
+
+test('concurrent article creates retain slug retries with tracked uploads', async () => {
+  const upload = await seedTrackedUpload();
+  const title = `Concurrent attached slug ${randomUUID()}`;
+  const responses = await Promise.all(
+    Array.from({ length: 4 }, () =>
+      postArticle({ title, content: doc(imageNode(upload.src)) })
+    )
+  );
+  assert.deepEqual(
+    responses.map(({ status }) => status),
+    [201, 201, 201, 201]
+  );
+  assert.ok(
+    (
+      await prisma.upload.findUniqueOrThrow({
+        where: { objectKey: upload.key },
+      })
+    ).attachedAt
+  );
+});
+
+test('cleanup race rolls back an article write when cleanup locks first', async () => {
+  const now = new Date('2026-09-26T12:00:00.000Z');
+  const upload = await seedTrackedUpload({
+    createdAt: new Date(now.getTime() - 24 * 60 * 60 * 1000),
+  });
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let entered!: () => void;
+  const didEnter = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const cleanup = cleanupStaleUploads({
+    now,
+    batchSize: 100,
+    deleteFile: async () => {
+      entered();
+      await released;
+    },
+  });
+  await didEnter;
+  const article = postArticle({
+    title: `Cleanup wins ${randomUUID()}`,
+    content: doc(imageNode(upload.src)),
+  });
+  release();
+
+  assert.equal((await cleanup).deleted, 1);
+  assert.equal((await article).status, 400);
+});
+
+test('cleanup race skips an upload when article attachment locks first', async () => {
+  const now = new Date('2026-09-26T12:00:00.000Z');
+  const upload = await seedTrackedUpload({
+    createdAt: new Date(now.getTime() - 24 * 60 * 60 * 1000),
+  });
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let entered!: () => void;
+  const didEnter = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const attachment = prisma.$transaction((tx) =>
+    persistWithArticleUploads(
+      tx,
+      doc(imageNode(upload.src)) as TiptapDocument,
+      async () => {
+        entered();
+        await released;
+      }
+    )
+  );
+  await didEnter;
+  const cleanup = await cleanupStaleUploads({
+    now,
+    batchSize: 100,
+    deleteFile: async () => {
+      throw new Error('attached upload must not be deleted');
+    },
+  });
+  release();
+  await attachment;
+
+  assert.equal(cleanup.skipped, 1);
+  assert.ok(
+    (
+      await prisma.upload.findUniqueOrThrow({
+        where: { objectKey: upload.key },
+      })
+    ).attachedAt
+  );
+});
 
 // Same root-inclusive builders as the schema tests, exercised through HTTP here.
 function documentAtDepth(depth: number, leaf: unknown = paragraph): unknown {
@@ -893,15 +1332,6 @@ for (const [name, content] of invalidStructures) {
 for (const [name, content] of [
   ['depth 20', documentAtDepth(20)],
   ['10,000 nodes', documentWithNodes(10_000)],
-  [
-    'canonical image URL',
-    doc({
-      type: 'image',
-      attrs: {
-        src: 'http://localhost:3000/uploads/550e8400-e29b-41d4-a716-446655440000.png',
-      },
-    }),
-  ],
 ] as const) {
   test(`POST persists ${name} unchanged`, async () => {
     const { slug } = await createTestArticle(content);
@@ -910,6 +1340,17 @@ for (const [name, content] of [
     assert.deepEqual((await response.json()).content, content);
   });
 }
+
+test('POST persists a tracked canonical image URL unchanged', async () => {
+  const upload = await seedTrackedUpload({
+    key: '550e8400-e29b-41d4-a716-446655440000.png',
+  });
+  const content = doc(imageNode(upload.src));
+  const { slug } = await createTestArticle(content);
+  const response = await fetch(`${baseUrl}/articles/${slug}`);
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).content, content);
+});
 
 for (const [name, content] of [
   ['depth 21', documentAtDepth(21)],
